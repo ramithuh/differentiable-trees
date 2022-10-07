@@ -5,7 +5,9 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from networkx.drawing.nx_pydot import graphviz_layout
 
-def generate_t(n_nodes, seed = None):
+def generate_t(n_nodes, n_leaves, seed = None):
+  assert n_nodes > n_leaves, "Hey! total nodes must be greater than leaves -_-"
+    
   key = jax.random.PRNGKey(1701)
   if(seed!=None):
     key = jax.random.PRNGKey(seed)
@@ -18,7 +20,7 @@ def generate_t(n_nodes, seed = None):
 
   for i in range(0,n_nodes-1):
     key, subkey = jax.random.split(key)
-    id = jax.random.choice(key,jnp.arange(i+1,n_nodes,1), [1])
+    id = jax.random.choice(key,jnp.arange(max(n_leaves,i+1),n_nodes,1), [1])
     indices[i] = int(id)
     
 
