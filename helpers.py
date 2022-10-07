@@ -6,6 +6,16 @@ import matplotlib.pyplot as plt
 from networkx.drawing.nx_pydot import graphviz_layout
 
 def generate_t(n_nodes, n_leaves, seed = None):
+  '''
+    Generates a random tree with 'n_nodes' nodes and 'n_leaves' leaves.
+
+    Args:
+      n_nodes: number of nodes in the tree
+      n_leaves: number of leaves in the tree
+      seed: random seed
+    Returns:
+      adjacency_matrix: adjacency matrix of the tree
+  '''
   assert n_nodes > n_leaves, "Hey! total nodes must be greater than leaves -_-"
     
   key = jax.random.PRNGKey(1701)
@@ -36,6 +46,15 @@ def generate_t(n_nodes, n_leaves, seed = None):
   return mat
 
 def show_graph_with_labels(adjacency_matrix, n_leaves):
+    '''
+      Shows the tree with label names. Adds distinct colors to the leave nodes and the ancestors of the leave nodes.
+
+      Args:
+        adjacency_matrix: adjacency matrix of the tree
+        n_leaves: number of leaves in the tree
+      Returns:
+        None
+    '''
     label_names = {}
     
     for i in range(0,adjacency_matrix.shape[0]):
