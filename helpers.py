@@ -1,29 +1,34 @@
+import jax
 import numpy as np
+import jax.numpy as jnp
 import networkx as nx
 import matplotlib.pyplot as plt
 from networkx.drawing.nx_pydot import graphviz_layout
 
 def generate_t(n_nodes, seed = None):
+  key = jax.random.PRNGKey(1701)
   if(seed!=None):
-    np.random.seed(seed)
+    key = jax.random.PRNGKey(seed)
+  
 
-  mat = np.zeros((n_nodes,n_nodes))
+  mat = jnp.zeros((n_nodes,n_nodes))
 
-  order = np.arange(0,n_nodes-1,1)
+  order = jnp.arange(0,n_nodes-1,1)
   indices = order.copy()*0
 
   for i in range(0,n_nodes-1):
-    id = np.random.choice(np.arange(i+1,n_nodes,1), 1)
+    key, subkey = jax.random.split(key)
+    id = jax.random.choice(key,jnp.arange(i+1,n_nodes,1), [1])
     indices[i] = int(id)
     
 
-  order = np.arange(0,n_nodes-1,1)
+  order = jnp.arange(0,n_nodes-1,1)
 
   #print(order,order.shape)
   #print(indices)
 
-
-  mat[order,indices] = 1
+  mat = mat.at[order,indices].set(1)
+  # mat[order,indices] = 1
 
   print(mat)
   return mat
