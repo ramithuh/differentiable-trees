@@ -35,13 +35,27 @@ def generate_t(n_nodes, n_leaves, seed = None):
   print(mat)
   return mat
 
-def show_graph_with_labels(adjacency_matrix, label_names):
+def show_graph_with_labels(adjacency_matrix, n_leaves):
+    label_names = {}
+    
+    for i in range(0,adjacency_matrix.shape[0]):
+        label_names[i] = chr(97+i)
+        
+    
     rows, cols = np.where(adjacency_matrix == 1)
     edges = zip(rows.tolist(), cols.tolist())
     gr = nx.DiGraph()#nx.DiGraph
     gr.add_edges_from(edges)
     
-    color_map = ['red' if (node == 4 or node == 3) else 'yellow' for node in gr]        
+    color_map = []
+    for node in gr:
+        if(node >= n_leaves):
+            color_map.append('red')
+        else:
+            color_map.append('yellow')
+        
+    
+    # color_map = ['red' if (node == 4 or node == 3) else 'yellow' for node in gr]        
     
     pos = graphviz_layout(gr, prog="dot")
     nx.draw(gr,pos, node_size=500 , labels = label_names,with_labels=True, node_color = color_map)
