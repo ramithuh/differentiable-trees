@@ -3,3 +3,4 @@ pydot
 optax
 networkx
 matplotlib
+networkx==2.5
