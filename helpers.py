@@ -4,6 +4,9 @@ import jax.nn as nn
 import jax.numpy as jnp
 import networkx as nx
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from netgraph import Graph
+
 from networkx.drawing.nx_pydot import graphviz_layout
 
 def generate_t(n_nodes, n_leaves, seed = None):
@@ -121,3 +124,64 @@ def update_tree(params, base_tree):
     t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself) 
     
     return t
+
+
+def animate_tree(adjacency_matrix, n_leaves, n_ancestors):
+    total_frames = adjacency_matrix.shape[0]
+    n_all = n_leaves + n_ancestors
+
+    label_names = {}
+
+    for i in range(0,adjacency_matrix.shape[1]):
+        label_names[i] = chr(97+i)
+
+
+    color_map = {}
+    for i in range(0,n_all):
+        if(i >= n_leaves):
+            color_map[i] = 'red'
+        else:
+            color_map[i] = 'Yellow'
+
+    partitions = [
+        list(range(n_leaves)),
+        list(range(n_leaves, n_leaves+n_ancestors-1)),
+        list(range(n_leaves+n_ancestors-1, n_leaves+n_ancestors))
+    ]
+
+
+
+    fig, ax = plt.subplots()
+    g = Graph(np.ones((n_all, n_all)), edge_layout='curved', edge_width=2, arrows=True, ax=ax, 
+              node_layout='multipartite', node_layout_kwargs=dict(layers=partitions, reduce_edge_crossings=True),
+              node_labels = label_names, node_label_fontdict=dict(size=14),node_size = 10, node_color = color_map) # initialise with fully connected graph
+
+
+    def update(ii):
+
+    #     s = adjacency_matrix2[ii]
+    #     discretized = jnp.round(combine_to_seq(params, seqs))
+    #     cost_ = compute_cost(discretized, s, average = False)
+
+    #     s_ = jnp.arange(0,n_all,1)
+    #     e_ = s.argmax(axis = 1)
+
+    #     edges_ = jnp.c_[s_, e_]
+    #     l  = list(zip(edges_, cost_))
+
+    #     new_labels = {tuple(x[0].tolist()):float(x[1]) for x in l}
+
+    #     g.draw_edge_labels(g.edge_list, new_labels, g.node_positions)
+    #     g.fig.canvas.draw_idle()
+
+
+        for (jj, kk), artist in g.edge_artists.items():
+            # turn visibility of edge artists on or off, depending on the adjacency
+            if adjacency_matrix[ii, jj, kk]:
+                artist.set_visible(True)
+            else:
+                artist.set_visible(False)
+        return g.edge_artists.values()
+
+    animation = FuncAnimation(fig, update, frames=total_frames, interval=200, blit=True)
+    return animation
