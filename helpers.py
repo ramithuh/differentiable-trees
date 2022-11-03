@@ -99,19 +99,27 @@ def discretize_tree_topology(tree, n_nodes):
     return t_q
 
 
-def combine_to_seq(params, seqs, temperature = 1):
+def combine_to_seq(params, seqs, n_leaves, n_all, temperature = 1):
     
-    seq_1 = nn.sigmoid(temperature*params['d'])
-    seq_2 = nn.sigmoid(temperature*params['e'])
+    for i in range(0, n_all - n_leaves):
+        key = chr(97+i + n_leaves)
+        
+        seq      = nn.sigmoid(temperature*params[key])
+        hard_seq = (seq > 0.5).astype(int)
+        
+        seqs = seqs.at[- n_leaves + i].set(seq)
     
-    hard_seq_1 = (seq_1 > 0.5).astype(int)
-    hard_seq_2 = (seq_2 > 0.5).astype(int)
+#     seq_1 = nn.sigmoid(temperature*params['d'])
+#     seq_2 = nn.sigmoid(temperature*params['e'])
+    
+#     hard_seq_1 = (seq_1 > 0.5).astype(int)
+#     hard_seq_2 = (seq_2 > 0.5).astype(int)
     
     
     
     
-    seqs = seqs.at[-2].set(seq_1)
-    seqs = seqs.at[-1].set(seq_2)
+#     seqs = seqs.at[-2].set(seq_1)
+#     seqs = seqs.at[-1].set(seq_2)
     
     return seqs
 
@@ -126,8 +134,11 @@ def update_tree(params, base_tree):
     return t
 
 
-def animate_tree(adjacency_matrix, n_leaves, n_ancestors):
-    total_frames = adjacency_matrix.shape[0]
+def animate_tree(adjacency_matrix, n_leaves, n_ancestors, total_frames = None):
+    
+    if(total_frames == None):
+        total_frames = adjacency_matrix.shape[0]
+        
     n_all = n_leaves + n_ancestors
 
     label_names = {}
