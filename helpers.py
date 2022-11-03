@@ -1,5 +1,6 @@
 import jax
 import numpy as np
+import jax.nn as nn
 import jax.numpy as jnp
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -31,7 +32,7 @@ def generate_t(n_nodes, n_leaves, seed = None):
   for i in range(0,n_nodes-1):
     key, subkey = jax.random.split(key)
     id = jax.random.choice(key,jnp.arange(max(n_leaves,i+1),n_nodes,1), [1])
-    indices[i] = int(id)
+    indices = indices.at[i].set(int(id))
     
 
   order = jnp.arange(0,n_nodes-1,1)
@@ -45,7 +46,7 @@ def generate_t(n_nodes, n_leaves, seed = None):
   print(mat)
   return mat
 
-def show_graph_with_labels(adjacency_matrix, n_leaves):
+def show_graph_with_labels(adjacency_matrix, n_leaves, return_img = False):
     '''
       Shows the tree with label names. Adds distinct colors to the leave nodes and the ancestors of the leave nodes.
 
@@ -63,6 +64,8 @@ def show_graph_with_labels(adjacency_matrix, n_leaves):
     
     rows, cols = np.where(adjacency_matrix == 1)
     edges = zip(rows.tolist(), cols.tolist())
+    
+    
     gr = nx.DiGraph()#nx.DiGraph
     gr.add_edges_from(edges)
     
@@ -75,7 +78,46 @@ def show_graph_with_labels(adjacency_matrix, n_leaves):
         
     
     # color_map = ['red' if (node == 4 or node == 3) else 'yellow' for node in gr]        
+    fig = plt.figure()
     
     pos = graphviz_layout(gr, prog="dot")
     nx.draw(gr,pos, node_size=500 , labels = label_names,with_labels=True, node_color = color_map)
-    plt.show()
+    
+    
+    if(return_img):
+        return fig
+    else:
+        fig.show()
+    
+def discretize_tree_topology(tree, n_nodes):
+    t_argmax = jnp.argmax(tree,axis = 1)
+    t_q = nn.one_hot(t_argmax, n_nodes)
+    
+    return t_q
+
+
+def combine_to_seq(params, seqs, temperature = 1):
+    
+    seq_1 = nn.sigmoid(temperature*params['d'])
+    seq_2 = nn.sigmoid(temperature*params['e'])
+    
+    hard_seq_1 = (seq_1 > 0.5).astype(int)
+    hard_seq_2 = (seq_2 > 0.5).astype(int)
+    
+    
+    
+    
+    seqs = seqs.at[-2].set(seq_1)
+    seqs = seqs.at[-1].set(seq_2)
+    
+    return seqs
+
+def update_tree(params, base_tree):
+    n_leaves = (base_tree.shape[1] - params['t'].shape[1])
+    
+    t_softmax = nn.softmax(params['t'],axis=1)
+
+    t = base_tree.at[0:-1,n_leaves:].set(t_softmax)
+    t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself) 
+    
+    return t
