@@ -1,0 +1,6 @@
+jax[cuda]
+pydot
+optax
+networkx
+matplotlib==3.2.2
+networkx==2.5
