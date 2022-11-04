@@ -165,7 +165,7 @@ def animate_tree(adjacency_matrix, n_leaves, n_ancestors, total_frames = None):
     fig, ax = plt.subplots()
     g = Graph(np.ones((n_all, n_all)), edge_layout='curved', edge_width=2, arrows=True, ax=ax, 
               node_layout='multipartite', node_layout_kwargs=dict(layers=partitions, reduce_edge_crossings=True),
-              node_labels = label_names, node_label_fontdict=dict(size=14),node_size = 10, node_color = color_map) # initialise with fully connected graph
+              node_labels = label_names, node_label_fontdict=dict(size=14),node_color = color_map) # initialise with fully connected graph
 
 
     def update(ii):
