@@ -133,7 +133,7 @@ def update_tree(params, base_tree):
     
     return t
 
-def regularize_graph(t_, s, verbose = False):
+def enforce_graph(t_, s, metadata = None, verbose = False):
     ''' 
 
         Enforces constraints such that,
@@ -147,6 +147,11 @@ def regularize_graph(t_, s, verbose = False):
         Returns:
             loss: loss value
     '''
+    n_all = metadata['n_all']
+    n_leaves = metadata['n_leaves']
+    n_ancestors = metadata['n_ancestors']
+
+    bidirection_loss = jnp.sum(jnp.matmul(t_,t_)*jnp.identity(t_.shape[0]))
 
     
     tree_force_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(t_[:-1, n_all - n_ancestors: n_all], axis = 0) - 2),2))
@@ -159,8 +164,9 @@ def regularize_graph(t_, s, verbose = False):
     if(verbose):
         print("bifurcating tree_forcing_loss = ", tree_force_loss)
         print("self loop_loss = ", loop_loss)
+        print("bidirectional loss = ", bidirection_loss)
     
-    return tree_force_loss + loop_loss
+    return tree_force_loss + loop_loss + bidirection_loss
 
 
 def animate_tree(adjacency_matrix, n_leaves, n_ancestors, total_frames = None):
