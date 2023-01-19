@@ -107,7 +107,7 @@ def combine_to_seq(params, seqs, n_leaves, n_all, temperature = 1):
         seq      = nn.sigmoid(temperature*params[key])
         hard_seq = (seq > 0.5).astype(int)
         
-        seqs = seqs.at[- n_leaves + i].set(seq)
+        seqs = seqs.at[- n_leaves + i + 1].set(seq)
     
 #     seq_1 = nn.sigmoid(temperature*params['d'])
 #     seq_2 = nn.sigmoid(temperature*params['e'])
