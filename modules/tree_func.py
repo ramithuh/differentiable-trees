@@ -10,6 +10,16 @@ def discretize_tree_topology(tree, n_nodes):
     
     return t_q
 
+def update_tree(params, base_tree):
+    n_leaves = (base_tree.shape[1] - params['t'].shape[1])
+    
+    t_softmax = nn.softmax(params['t'],axis=1)
+
+    t = base_tree.at[0:-1,n_leaves:].set(t_softmax)
+    t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself) 
+    
+    return t
+
 def combine_to_seq(params, seqs, n_leaves, n_all, temperature = 1):
     
     for i in range(0, n_all - n_leaves):
@@ -53,32 +63,19 @@ def enforce_graph(t_, s, metadata = None, verbose = False):
     n_leaves = metadata['n_leaves']
     n_ancestors = metadata['n_ancestors']
 
-    bidirection_loss = jnp.sum(jnp.matmul(t_,t_)*jnp.identity(t_.shape[0]))
-
-    
     tree_force_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(t_[:-1, n_all - n_ancestors: n_all], axis = 0) - 2),2))
-    
-    #tree_force_loss = (s*abs(t_[:-1,-2].sum()-2))**2 + (s*abs(t_[:-1,-1].sum()-2))**2
     
     loop_loss = jnp.multiply(jnp.identity(n_all-1), t_[:-1,:-1]).sum()*100  ## penalize self connections
     
+    bidirection_loss = jnp.sum(jnp.matmul(t_,t_)*jnp.identity(t_.shape[0]))
     
     if(verbose):
         print("bifurcating tree_forcing_loss = ", tree_force_loss)
         print("self loop_loss = ", loop_loss)
         print("bidirectional loss = ", bidirection_loss)
     
-    return tree_force_loss + loop_loss + bidirection_loss
+    return tree_force_loss, loop_loss, bidirection_loss
 
-def update_tree(params, base_tree):
-    n_leaves = (base_tree.shape[1] - params['t'].shape[1])
-    
-    t_softmax = nn.softmax(params['t'],axis=1)
-
-    t = base_tree.at[0:-1,n_leaves:].set(t_softmax)
-    t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself) 
-    
-    return t
 
 def compute_cost(sequences, tree, verbose = False, average = True):
     if(verbose==True):
@@ -101,10 +98,18 @@ def compute_cost(sequences, tree, verbose = False, average = True):
 
 def compute_loss(params, seqs, base_tree, metadata, verbose = False):
     n_leaves = metadata['n_leaves']
+    n_all    = metadata['n_all']
     
     seqs_ = combine_to_seq(params, seqs, n_leaves, n_all)
     t_    = update_tree(params, base_tree)
 
-    loss  = compute_cost(seqs_,t_) + enforce_graph(t_,10,metadata, verbose)
     
+    cost = compute_cost(seqs_,t_)
+    tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
+    
+    loss = cost + tree_force_loss + loop_loss + bidirection_loss
+
+    if(verbose):
+        return cost, tree_force_loss, loop_loss, bidirection_loss, loss
+
     return loss

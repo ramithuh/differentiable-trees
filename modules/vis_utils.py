@@ -85,7 +85,7 @@ def show_graph_with_labels(adjacency_matrix, n_leaves, return_img = False):
     
     pos = graphviz_layout(gr, prog="dot")
     nx.draw(gr,pos, node_size=500 , labels = label_names,with_labels=True, node_color = color_map)
-    
+    plt.close(fig)
     
     if(return_img):
         return fig
