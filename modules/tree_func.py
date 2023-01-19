@@ -99,27 +99,12 @@ def compute_cost(sequences, tree, verbose = False, average = True):
     
     return ans
 
-def regularize_graph(t_, s, verbose = False):
-    
-    tree_force_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(t_[:-1, n_all - n_ancestors: n_all], axis = 0) - 2),2))
-    
-    #tree_force_loss = (s*abs(t_[:-1,-2].sum()-2))**2 + (s*abs(t_[:-1,-1].sum()-2))**2
-    
-    loop_loss = jnp.multiply(jnp.identity(n_all-1), t_[:-1,:-1]).sum()*100  ## penalize self connections
-    
-    
-    if(verbose):
-        print("bifurcating tree_forcing_loss = ", tree_force_loss)
-        print("self loop_loss = ", loop_loss)
-    
-    return tree_force_loss + loop_loss
-
 def compute_loss(params, seqs, base_tree, metadata, verbose = False):
     n_leaves = metadata['n_leaves']
-
+    
     seqs_ = combine_to_seq(params, seqs, n_leaves, n_all)
     t_    = update_tree(params, base_tree)
 
-    loss  = compute_cost(seqs_,t_) + regularize_graph(t_,10, verbose)
+    loss  = compute_cost(seqs_,t_) + enforce_graph(t_,10,metadata, verbose)
     
     return loss
