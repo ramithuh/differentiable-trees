@@ -67,7 +67,7 @@ def enforce_graph(t_, s, metadata = None, verbose = False):
     
     loop_loss = jnp.multiply(jnp.identity(n_all-1), t_[:-1,:-1]).sum()*100  ## penalize self connections
     
-    bidirection_loss = jnp.sum(jnp.matmul(t_,t_)*jnp.identity(t_.shape[0]))
+    bidirection_loss = jnp.sum(jnp.matmul(t_,t_)*jnp.identity(t_.shape[0]))*100 ## penalize bidirectional connections
     
     if(verbose):
         print("bifurcating tree_forcing_loss = ", tree_force_loss)
