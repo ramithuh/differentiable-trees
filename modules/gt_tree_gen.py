@@ -49,12 +49,12 @@ def create_seq(seq, depth):
   sequences[depth].append(seq_2)
   create_seq(seq_2, depth+1)
 
-def generate_groundtruth(metadata, n_mutations = 1):
+def generate_groundtruth(metadata):
     global target_depth
     global num_mutations
     global sequences
 
-    num_mutations = n_mutations
+    num_mutations = metadata['n_mutations']
     n_all = metadata['n_all']
     n_leaves = metadata['n_leaves']
     n_ancestors = metadata['n_ancestors']
@@ -103,4 +103,4 @@ def generate_groundtruth(metadata, n_mutations = 1):
         leave[iter] = 1
         tree.append(leave)
 
-    return jnp.array(masked_main), jnp.array(true_main), jnp.array(tree)
+    return jnp.array(masked_main).astype(jnp.float32), jnp.array(true_main).astype(jnp.float32), jnp.array(tree).astype(jnp.float32)

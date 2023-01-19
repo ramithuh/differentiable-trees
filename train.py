@@ -16,6 +16,7 @@ import pydot
 import numpy as np
 from modules.vis_utils import *
 from modules.tree_func import *
+from modules.gt_tree_gen import *
 
 from matplotlib import rc
 import plotly.express as px
@@ -23,18 +24,28 @@ rc('animation', html='jshtml')
 
 key = jax.random.PRNGKey(42)
 
+
+#### Parse arguments
+parser = argparse.ArgumentParser(description='Groundtruth Mode')
+parser.add_argument('-gt','--groundtruth', help='Log groundtruth?', required=True)
+parser.add_argument('-l','--leaves', help='# of leaves?', required=False)
+parser.add_argument('-m','--mutations', help='# of leaves?', required=False)
+args = vars(parser.parse_args())
+
 #### Define Sequence length and number of leaves
 seq_length  = 20
 
-n_leaves    = 4
+n_leaves    = int(args['leaves']) if args['leaves']!=None else 4
 n_ancestors = n_leaves - 1
 n_all       = n_leaves + n_ancestors
+n_mutations = int(args['mutations']) if args['mutations']!=None else 1
 
 metadata = {
     'n_all' : n_all,
     'n_leaves' : n_leaves, 
     'n_ancestors' : n_ancestors,
-    'seq_length' : seq_length
+    'seq_length' : seq_length,
+    'n_mutations' : n_mutations
     }
 
 
@@ -43,37 +54,12 @@ wandb.init(project="Differentiable-Trees", entity="ramithx1", config = metadata,
 #### Generate a random sequence of 0s and 1s
 seqs = jax.random.randint(key, shape = (n_all, seq_length), minval = 0, maxval = 2).astype(jnp.float32)
 
-parser = argparse.ArgumentParser(description='Groundtruth Mode')
-parser.add_argument('-gt','--groundtruth', help='Log groundtruth?', required=True)
-args = vars(parser.parse_args())
+
+
+
 
 if(args['groundtruth'] == 'True'):
-    seqs = jnp.array(
-    [[0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]).astype(jnp.float32)
-
-    gt_seqs = jnp.array(
-    [[0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]).astype(jnp.float32)
-
-    tree = jnp.array(
-        [[0, 0, 0, 0, 1, 0, 0],
-        [0, 0, 0, 0, 1, 0, 0],
-        [0, 0, 0, 0, 0, 1, 0],
-        [0, 0, 0, 0, 0, 1, 0],
-        [0, 0, 0, 0, 0, 0, 1],
-        [0, 0, 0, 0, 0, 0, 1],
-        [0, 0, 0, 0, 0, 0, 1]])
+    seqs, gt_seqs, tree = generate_groundtruth(metadata)
 
     gt_tree = show_graph_with_labels(tree, n_leaves, True)
     gt_seqs_plot = px.imshow(gt_seqs, text_auto=True)
@@ -118,7 +104,7 @@ compute_loss(params, seqs, base_tree, metadata)
 
 
 #### Training loop
-for _ in range(300):
+for _ in range(1500):
     grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata)
 
     ## Get the current tree
