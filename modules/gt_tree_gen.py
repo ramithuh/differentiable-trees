@@ -85,7 +85,7 @@ def generate_groundtruth(metadata, seed = 42):
     for i in range(0,n_ancestors):
         masked_main.append(seq)
 
-    for i in range(0,len(sequences)-1):
+    for i in range(len(sequences)-2, -1, -1):
         for k in range(0,len(sequences[i])):
             true_main.append(sequences[i][k])
     true_main.append(seq)
