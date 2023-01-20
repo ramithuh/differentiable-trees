@@ -99,10 +99,14 @@ def compute_cost(sequences, tree, verbose = False, average = True):
 def compute_loss(params, seqs, base_tree, metadata, verbose = False):
     n_leaves = metadata['n_leaves']
     n_all    = metadata['n_all']
-    
-    seqs_ = combine_to_seq(params, seqs, n_leaves, n_all)
-    t_    = update_tree(params, base_tree)
 
+    if(metadata['args']['fix_seqs']=='True'):
+        seqs_ = seqs
+    else:
+        seqs_ = combine_to_seq(params, seqs, n_leaves, n_all)
+    
+    t_    = update_tree(params, base_tree)
+    
     
     cost = compute_cost(seqs_,t_)
     tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
