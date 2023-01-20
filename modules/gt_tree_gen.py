@@ -26,9 +26,10 @@ def create_seq(seq, depth):
   for k in range(0,num_mutations):
     index_1 = random.randint(0,len(seq)-1)
     index_2 = random.randint(0,len(seq)-1)
+  
+  random_indexes[0]= random.sample(range(len(seq)), num_mutations)
+  random_indexes[1]= random.sample(range(len(seq)), num_mutations)
 
-    random_indexes[0].append(index_1)
-    random_indexes[1].append(index_2)
 
   seq_1 = seq[::]
   seq_2 = seq[::]
