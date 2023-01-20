@@ -47,7 +47,9 @@ def create_seq(seq, depth):
   sequences[depth].append(seq_2)
   create_seq(seq_2, depth+1)
 
-def generate_groundtruth(metadata):
+def generate_groundtruth(metadata, seed = 42):
+    random.seed(seed)
+
     global target_depth
     global num_mutations
     global sequences
