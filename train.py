@@ -22,18 +22,24 @@ from matplotlib import rc
 import plotly.express as px
 rc('animation', html='jshtml')
 
-key = jax.random.PRNGKey(42)
+
 
 
 #### Parse arguments
 parser = argparse.ArgumentParser(description='Groundtruth Mode')
 parser.add_argument('-gt','--groundtruth', help='Log groundtruth?', required=True)
-parser.add_argument('-l','--leaves', help='# of leaves?', required=False)
-parser.add_argument('-m','--mutations', help='# of leaves?', required=False)
+parser.add_argument('-fs','--fix_seqs'   , help='fix seqs at gt?' , required=False)
+
+parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False)
+parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False)
+parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False)
+
+parser.add_argument('-s','--seed'        , help='seed'            , required=False)
+
 args = vars(parser.parse_args())
 
 #### Define Sequence length and number of leaves
-seq_length  = 20
+seq_length  = int(args['seq_length']) if args['seq_length']!=None else 20
 
 n_leaves    = int(args['leaves']) if args['leaves']!=None else 4
 n_ancestors = n_leaves - 1
@@ -45,21 +51,28 @@ metadata = {
     'n_leaves' : n_leaves, 
     'n_ancestors' : n_ancestors,
     'seq_length' : seq_length,
-    'n_mutations' : n_mutations
+    'n_mutations' : n_mutations,
+    'args': args,
+    'exp_name' : f"l={n_leaves}, m={n_mutations}, s={seq_length}, fs={args['fix_seqs']}",
+    'seed' : int(args['seed']) if args['seed']!=None else 42
     }
 
 
-wandb.init(project="Differentiable-Trees", entity="ramithx1", config = metadata, tags=["FASRC"])
+wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth"])
+
 
 #### Generate a random sequence of 0s and 1s
+key = jax.random.PRNGKey(metadata['seed'])
 seqs = jax.random.randint(key, shape = (n_all, seq_length), minval = 0, maxval = 2).astype(jnp.float32)
 
 
 
-
-
 if(args['groundtruth'] == 'True'):
-    seqs, gt_seqs, tree = generate_groundtruth(metadata)
+    seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
+
+    #if we don't want sequences to change, set seqs to gt_seqs
+    if(args['fix_seqs'] == 'True'):
+        seqs = gt_seqs
 
     gt_tree = show_graph_with_labels(tree, n_leaves, True)
     gt_seqs_plot = px.imshow(gt_seqs, text_auto=True)
@@ -104,19 +117,27 @@ compute_loss(params, seqs, base_tree, metadata)
 
 
 #### Training loop
-for _ in range(1500):
+for _ in range(800):
+
+    ##=> sort of forward model (using params to generate new sequences and tree)
+    #=> Compute the gradients
     grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata)
 
-    ## Get the current tree
-    t_  = update_tree(params, base_tree)
-    t__ = discretize_tree_topology(t_,n_all)
-    tree_at_epoch = show_graph_with_labels(t__, n_leaves, True)
-    t__ = t__.at[-1,-1].set(0)
 
-    ## Get the current sequences
-    new_seq = combine_to_seq(params, seqs, n_leaves, n_all)
+    ###~ Get the current discretized tree
+    t_            = update_tree(params, base_tree)
+    t_d           = discretize_tree_topology(t_,n_all)
+    tree_at_epoch = show_graph_with_labels(t_d, n_leaves, True)
+
+    ###~ Get the current sequences as a plot
+    if(args['fix_seqs'] == 'True'):
+        new_seq = seqs
+    else:
+        new_seq = combine_to_seq(params, seqs, n_leaves, n_all)
     new_seq = px.imshow(new_seq, text_auto=True)
-    
+
+
+    ## Compute the loss and the metrics for loggings purposes
     cost, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, verbose = True)
 
     ## Log the metrics
@@ -135,6 +156,6 @@ for _ in range(1500):
     if(_%100==0):
         print("{:.5f}".format(loss,end = " \n"))
     
-    #### Update the parameters
+    #=> Update the parameters
     updates, opt_state = optimizer.update(grads, opt_state)
     params = optax.apply_updates(params, updates)
