@@ -23,9 +23,6 @@ def create_seq(seq, depth):
 
 
   random_indexes = [[] for x in range(2)]
-  for k in range(0,num_mutations):
-    index_1 = random.randint(0,len(seq)-1)
-    index_2 = random.randint(0,len(seq)-1)
   
   random_indexes[0]= random.sample(range(len(seq)), num_mutations)
   random_indexes[1]= random.sample(range(len(seq)), num_mutations)
@@ -90,6 +87,15 @@ def generate_groundtruth(metadata):
         for k in range(0,len(sequences[i])):
             true_main.append(sequences[i][k])
     true_main.append(seq)
+
+    i = 0
+    for item in true_main:
+      print(">seq"+str(i))
+      for char in item:
+        print(char, end="")
+      print()
+
+      i+=1
 
     tree = []
 
