@@ -103,7 +103,7 @@ def compute_loss(params, seqs, base_tree, metadata, verbose = False):
     if(metadata['args']['fix_seqs']=='True'):
         seqs_ = seqs
     else:
-        seqs_ = combine_to_seq(params, seqs, n_leaves, n_all)
+        seqs_ = combine_to_seq(params, seqs, n_leaves, n_all, metadata['seq_temp'] )
     
     t_    = update_tree(params, base_tree)
     

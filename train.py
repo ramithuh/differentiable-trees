@@ -54,7 +54,8 @@ metadata = {
     'n_mutations' : n_mutations,
     'args': args,
     'exp_name' : f"l={n_leaves}, m={n_mutations}, s={seq_length}, fs={args['fix_seqs']}",
-    'seed' : int(args['seed']) if args['seed']!=None else 42
+    'seed' : int(args['seed']) if args['seed']!=None else 42,
+    'seq_temp': 0.5,
     }
 
 
@@ -133,7 +134,7 @@ for _ in range(800):
     if(args['fix_seqs'] == 'True'):
         new_seq = seqs
     else:
-        new_seq = combine_to_seq(params, seqs, n_leaves, n_all)
+        new_seq = combine_to_seq(params, seqs, n_leaves, n_all, metadata['seq_temp'])
     new_seq = px.imshow(new_seq, text_auto=True)
 
 
