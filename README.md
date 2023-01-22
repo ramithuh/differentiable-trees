@@ -7,6 +7,8 @@ Example experiment : https://wandb.ai/ramithx1/Differentiable-Trees/reports/Diff
 
 ![ezgif-1-54b788b4ec](https://user-images.githubusercontent.com/3503098/213895875-989c9c49-cf7c-4f31-ab5c-68273e870c01.gif)
 
+### Environment Setup
+
 ```
 conda create -n jax_env python=3.8
 source activate jax_env
