@@ -1,7 +1,7 @@
 # differentiable-trees
 
 
-Given leaf nodes, generate the most cost effective tree topology and ancestors using gradient descent.
+Given leaf nodes, generate the most cost effective, `1) tree topology` and `2) ancestors` using gradient descent.
 
 The tree search is performed such that we enforce to [`tree_forcing_loss`](https://github.com/ramithuh/differentiable-trees/blob/caf7abdfefcb3c5c3bf916e4683fb07ae4619715/modules/tree_func.py#L48) and [`tree_traversal_cost`](https://github.com/ramithuh/differentiable-trees/blob/caf7abdfefcb3c5c3bf916e4683fb07ae4619715/modules/tree_func.py#L80).
 - therefore, this approach does not need training data
