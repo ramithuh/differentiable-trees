@@ -29,7 +29,7 @@ rc('animation', html='jshtml')
 parser = argparse.ArgumentParser(description='Train a differentiable tree model')
 
 parser.add_argument('-gt', '--groundtruth', action='store_true', help='Retrieve groundtruth?')
-parser.set_defaults(gt=True)
+parser.set_defaults(groundtruth=True)
 
 #tree and seq generate parameters
 parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False)
@@ -62,9 +62,11 @@ metadata = {
     'seq_length' : seq_length,
     'n_mutations' : n_mutations,
     'args': args,
-    'exp_name' : f"l={n_leaves}, m={n_mutations}, s={seq_length}, fs={args['fix_seqs']}",
+    'exp_name' : f"l={n_leaves}, m={n_mutations}, s={seq_length}, fs={args['fix_seqs']}, ft={args['fix_tree']}" ,
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
+    'lr': 1,
+    'epochs': 50000,
     }
 
 
@@ -106,7 +108,7 @@ if(args['groundtruth']):
 base_tree = jnp.zeros((n_all, n_all))
 
 #### Define optimizer and parameters (t and the ancestor sequences)
-optimizer = optax.adam(1)
+optimizer = optax.adam(metadata['lr'])
 params = {
     't': jax.random.normal(key, (n_all - 1,n_ancestors))
     }
@@ -127,7 +129,7 @@ compute_loss(params, seqs, base_tree, metadata)
 
 
 #### Training loop
-for _ in range(800):
+for _ in range(metadata['epochs']):
 
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
