@@ -26,15 +26,24 @@ rc('animation', html='jshtml')
 
 
 #### Parse arguments
-parser = argparse.ArgumentParser(description='Groundtruth Mode')
-parser.add_argument('-gt','--groundtruth', help='Log groundtruth?', required=True)
-parser.add_argument('-fs','--fix_seqs'   , help='fix seqs at gt?' , required=False)
+parser = argparse.ArgumentParser(description='Train a differentiable tree model')
 
+parser.add_argument('-gt', '--groundtruth', action='store_true', help='Retrieve groundtruth?')
+parser.set_defaults(gt=True)
+
+#tree and seq generate parameters
 parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False)
 parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False)
 parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False)
-
 parser.add_argument('-s','--seed'        , help='seed'            , required=False)
+
+
+## what to train?
+parser.add_argument('-fs', '--fix_seqs', action='store_true', help='Fix sequences when training ?')
+parser.set_defaults(fix_seqs=False)
+
+parser.add_argument('-ft', '--fix_tree', action='store_true', help='Fix tree when training ?')
+parser.set_defaults(fix_tree=False)
 
 args = vars(parser.parse_args())
 
@@ -44,7 +53,7 @@ seq_length  = int(args['seq_length']) if args['seq_length']!=None else 20
 n_leaves    = int(args['leaves']) if args['leaves']!=None else 4
 n_ancestors = n_leaves - 1
 n_all       = n_leaves + n_ancestors
-n_mutations = int(args['mutations']) if args['mutations']!=None else 1
+n_mutations = int(args['mutations']) if args['mutations']!=None else 3
 
 metadata = {
     'n_all' : n_all,
@@ -59,7 +68,7 @@ metadata = {
     }
 
 
-wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth"])
+wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"])
 
 
 #### Generate a random sequence of 0s and 1s
@@ -68,11 +77,11 @@ seqs = jax.random.randint(key, shape = (n_all, seq_length), minval = 0, maxval =
 
 
 
-if(args['groundtruth'] == 'True'):
+if(args['groundtruth']):
     seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
 
     #if we don't want sequences to change, set seqs to gt_seqs
-    if(args['fix_seqs'] == 'True'):
+    if(args['fix_seqs']):
         seqs = gt_seqs
 
     gt_tree = show_graph_with_labels(tree, n_leaves, True)
@@ -131,7 +140,7 @@ for _ in range(800):
     tree_at_epoch = show_graph_with_labels(t_d, n_leaves, True)
 
     ###~ Get the current sequences as a plot
-    if(args['fix_seqs'] == 'True'):
+    if(args['fix_seqs']):
         new_seq = seqs
     else:
         new_seq = combine_to_seq(params, seqs, n_leaves, n_all, metadata['seq_temp'])
