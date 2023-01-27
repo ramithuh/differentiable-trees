@@ -77,6 +77,8 @@ wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="
 key = jax.random.PRNGKey(metadata['seed'])
 seqs = jax.random.randint(key, shape = (n_all, seq_length), minval = 0, maxval = 2).astype(jnp.float32)
 
+#### Generate a base tree
+base_tree = jnp.zeros((n_all, n_all))
 
 
 if(args['groundtruth']):
@@ -85,6 +87,10 @@ if(args['groundtruth']):
     #if we don't want sequences to change, set seqs to gt_seqs
     if(args['fix_seqs']):
         seqs = gt_seqs
+
+    #if we don't want tree to change, set base_tree to tree
+    if(args['fix_tree']):
+        base_tree = tree
 
     gt_tree = show_graph_with_labels(tree, n_leaves, True)
     gt_seqs_plot = px.imshow(gt_seqs, text_auto=True)
@@ -103,9 +109,6 @@ if(args['groundtruth']):
         "Groundtruth Total Loss" : gt_tree_force_loss + gt_loop_loss + gt_bidirection_loss + gt_cost
         })
 
-
-#### Generate a base tree
-base_tree = jnp.zeros((n_all, n_all))
 
 #### Define optimizer and parameters (t and the ancestor sequences)
 optimizer = optax.adam(metadata['lr'])
@@ -137,7 +140,10 @@ for _ in range(metadata['epochs']):
 
 
     ###~ Get the current discretized tree
-    t_            = update_tree(params, base_tree)
+    if(args['fix_tree']): 
+        t_ = base_tree
+    else:
+        t_ = update_tree(params, base_tree)
     t_d           = discretize_tree_topology(t_,n_all)
     tree_at_epoch = show_graph_with_labels(t_d, n_leaves, True)
 

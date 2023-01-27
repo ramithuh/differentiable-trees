@@ -105,7 +105,10 @@ def compute_loss(params, seqs, base_tree, metadata, verbose = False):
     else:
         seqs_ = combine_to_seq(params, seqs, n_leaves, n_all, metadata['seq_temp'] )
     
-    t_    = update_tree(params, base_tree)
+    if(metadata['args']['fix_tree']):
+        t_ = base_tree
+    else:
+        t_ = update_tree(params, base_tree)
     
     
     cost = compute_cost(seqs_,t_)
