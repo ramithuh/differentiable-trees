@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from jax import jit
 from functools import partial
 
+
 @partial(jit, static_argnums=1)
 def discretize_tree_topology(tree, n_nodes):
     t_argmax = jnp.argmax(tree,axis = 1)
@@ -66,9 +67,14 @@ def enforce_graph(t_, s, metadata = None, verbose = False):
         Returns:
             loss: loss value
     '''
-    n_all = metadata['n_all']
-    n_leaves = metadata['n_leaves']
-    n_ancestors = metadata['n_ancestors']
+
+    #n_all = metadata['n_all']
+    n_all = t_.shape[0]
+    n_leaves = (n_all + 1)//2
+    n_ancestors = n_all - n_leaves
+
+    # n_leaves = metadata['n_leaves']
+    # n_ancestors = metadata['n_ancestors']
 
     tree_force_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(t_[:-1, n_all - n_ancestors: n_all], axis = 0) - 2),2))
     
