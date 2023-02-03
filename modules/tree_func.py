@@ -26,9 +26,11 @@ def update_tree(params, base_tree):
     
     return t
 
-@partial(jit, static_argnums=1)
-def combine_to_seq(params, seqs, n_leaves, n_all, temperature = 1):
-    
+@jit
+def combine_to_seq(params, seqs, temperature = 1):
+    n_all = seqs.shape[0]
+    n_leaves = (n_all + 1)//2
+
     for i in range(0, n_all - n_leaves):
         key = str(i) #chr(97+i + n_leaves)
         
@@ -116,7 +118,7 @@ def compute_loss(params, seqs, base_tree, metadata, verbose = False):
     if(metadata['args']['fix_seqs']):
         seqs_ = seqs
     else:
-        seqs_ = combine_to_seq(params, seqs, n_leaves, n_all, metadata['seq_temp'] )
+        seqs_ = combine_to_seq(params, seqs, metadata['seq_temp'] )
     
     if(metadata['args']['fix_tree']):
         t_ = base_tree
