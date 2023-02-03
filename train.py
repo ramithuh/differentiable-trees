@@ -80,8 +80,8 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': 0.1,
-    'epochs': 2000,
-    'tLs':[0,0.02,1] #tree loss schedule
+    'epochs': 20000,
+    'tLs':[0,0.02,1,50] #tree loss schedule
     }
 
 
@@ -203,4 +203,5 @@ for _ in range(metadata['epochs']):
     params = optax.apply_updates(params, updates)
 
     ### update the tree loss schedule
-    metadata['tLs'][0] = min(metadata['tLs'][2], metadata['tLs'][0] + metadata['tLs'][1])
+    if(_%metadata['tLs'][3]==0):
+        metadata['tLs'][0] = min(metadata['tLs'][2], metadata['tLs'][0] + metadata['tLs'][1])
