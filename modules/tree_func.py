@@ -23,7 +23,7 @@ def update_tree(params, base_tree):
 def combine_to_seq(params, seqs, n_leaves, n_all, temperature = 1):
     
     for i in range(0, n_all - n_leaves):
-        key = chr(97+i + n_leaves)
+        key = str(i) #chr(97+i + n_leaves)
         
         seq      = nn.sigmoid(temperature*params[key])
         hard_seq = (seq > 0.5).astype(int)

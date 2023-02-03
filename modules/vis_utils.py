@@ -62,7 +62,7 @@ def show_graph_with_labels(adjacency_matrix, n_leaves, return_img = False):
     label_names = {}
     
     for i in range(0,adjacency_matrix.shape[0]):
-        label_names[i] = chr(97+i)
+        label_names[i] = str(i)
         
     
     rows, cols = np.where(adjacency_matrix == 1)

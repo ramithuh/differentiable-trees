@@ -45,7 +45,20 @@ parser.set_defaults(fix_seqs=False)
 parser.add_argument('-ft', '--fix_tree', action='store_true', help='Fix tree when training ?')
 parser.set_defaults(fix_tree=False)
 
+parser.add_argument('-it', '--initialize_tree', action='store_true', help='Initialize Tree with groundtruth?')
+parser.set_defaults(initialize_tree=False)
+
+parser.add_argument('-is', '--initialize_seq', action='store_true', help='Initialize Seq with groundtruth?')
+parser.set_defaults(initialize_seq=False)
+
 args = vars(parser.parse_args())
+
+### set contradictory arguments (otherwise could be confusing in wandb)
+if(args['fix_seqs']):
+    args['initialize_seq'] = True #if we fix seqs, automatically this is true
+
+if(args['fix_tree']):
+    args['initialize_tree'] = True  #if we fix tree, automatically this is true
 
 #### Define Sequence length and number of leaves
 seq_length  = int(args['seq_length']) if args['seq_length']!=None else 20
@@ -65,7 +78,7 @@ metadata = {
     'exp_name' : f"l={n_leaves}, m={n_mutations}, s={seq_length}, fs={args['fix_seqs']}, ft={args['fix_tree']}" ,
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
-    'lr': 1,
+    'lr': 0.1,
     'epochs': 50000,
     }
 
@@ -118,7 +131,7 @@ params = {
 
 #### Add the ancestor sequences to the parameters
 for i in range(0, n_ancestors):
-    params[chr(97+i + n_leaves)] = jax.random.normal(key, (seq_length,))
+    params[str(i)] = jax.random.normal(key, (seq_length,))
 
 #### Initialize the optimizer
 opt_state = optimizer.init(params)
@@ -145,7 +158,8 @@ for _ in range(metadata['epochs']):
     else:
         t_ = update_tree(params, base_tree)
     t_d           = discretize_tree_topology(t_,n_all)
-    tree_at_epoch = show_graph_with_labels(t_d, n_leaves, True)
+    tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, True)
+    tree_matrix_at_epoch = px.imshow(t_, text_auto=True)
 
     ###~ Get the current sequences as a plot
     if(args['fix_seqs']):
@@ -169,6 +183,7 @@ for _ in range(metadata['epochs']):
          "bidirection loss": bidirection_loss,
 
          "tree":wandb.Image(tree_at_epoch),
+         "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
          "Seq":wandb.data_types.Plotly(new_seq)})
 
     if(_%100==0):
