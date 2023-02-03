@@ -1,15 +1,20 @@
 import jax
-import numpy as np
 import jax.nn as nn
 import jax.numpy as jnp
+import numpy as np
 import matplotlib.pyplot as plt
 
+from jax import jit
+from functools import partial
+
+@partial(jit, static_argnums=1)
 def discretize_tree_topology(tree, n_nodes):
     t_argmax = jnp.argmax(tree,axis = 1)
     t_q = nn.one_hot(t_argmax, n_nodes)
     
     return t_q
 
+@jit
 def update_tree(params, base_tree):
     n_leaves = (base_tree.shape[1] - params['t'].shape[1])
     
@@ -20,6 +25,7 @@ def update_tree(params, base_tree):
     
     return t
 
+@partial(jit, static_argnums=1)
 def combine_to_seq(params, seqs, n_leaves, n_all, temperature = 1):
     
     for i in range(0, n_all - n_leaves):
@@ -45,6 +51,7 @@ def combine_to_seq(params, seqs, n_leaves, n_all, temperature = 1):
     
     return seqs
 
+@jit
 def enforce_graph(t_, s, metadata = None, verbose = False):
     ''' 
 
@@ -76,7 +83,7 @@ def enforce_graph(t_, s, metadata = None, verbose = False):
     
     return tree_force_loss, loop_loss, bidirection_loss
 
-
+@jit
 def compute_cost(sequences, tree, verbose = False, average = True):
     if(verbose==True):
         show_graph_with_labels(discretize_tree_topology(tree, n_all),n_leaves)
