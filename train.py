@@ -26,16 +26,16 @@ rc('animation', html='jshtml')
 
 
 #### Parse arguments
-parser = argparse.ArgumentParser(description='Train a differentiable tree model')
+parser = argparse.ArgumentParser(description='Train a differentiable tree model. \n sample usage :  python train.py -l 8 -m 10 -sl 50 -fs')
 
 parser.add_argument('-gt', '--groundtruth', action='store_true', help='Retrieve groundtruth?')
 parser.set_defaults(groundtruth=True)
 
 #tree and seq generate parameters
-parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False)
-parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False)
-parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False)
-parser.add_argument('-s','--seed'        , help='seed'            , required=False)
+parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False, type = int)
+parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False, type = int)
+parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False, type = int)
+parser.add_argument('-s','--seed'        , help='seed'            , required=False, type = int)
 
 
 ## what to train?
@@ -98,7 +98,7 @@ if(args['groundtruth']):
     seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
 
     #if we don't want sequences to change, set seqs to gt_seqs
-    if(args['fix_seqs']):
+    if(args['fix_seqs'] or args['initialize_seq']):
         seqs = gt_seqs
 
     #if we don't want tree to change, set base_tree to tree
@@ -109,7 +109,7 @@ if(args['groundtruth']):
     gt_seqs_plot = px.imshow(gt_seqs, text_auto=True)
 
     gt_cost = compute_cost(gt_seqs,tree)
-    gt_tree_force_loss, gt_loop_loss, gt_bidirection_loss = enforce_graph(tree, 10,metadata)
+    gt_tree_force_loss, gt_loop_loss, gt_bidirection_loss = enforce_graph(tree, 10, metadata)
 
     wandb.log({
         "Groundtruth Tree" : wandb.Image(gt_tree),
@@ -128,6 +128,11 @@ optimizer = optax.adam(metadata['lr'])
 params = {
     't': jax.random.normal(key, (n_all - 1,n_ancestors))
     }
+
+
+## Manually override the parameters such that the updated tree is the same as the base tree
+if(args['initialize_tree']):
+    params['t'] = tree[0:-1,n_leaves:]
 
 #### Add the ancestor sequences to the parameters
 for i in range(0, n_ancestors):
