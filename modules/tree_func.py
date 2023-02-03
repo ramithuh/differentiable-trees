@@ -111,7 +111,7 @@ def compute_cost(sequences, tree, verbose = False, average = True):
     
     return ans
 
-def compute_loss(params, seqs, base_tree, metadata, verbose = False):
+def compute_loss(params, seqs, base_tree, metadata, temp, verbose = False):
     n_leaves = metadata['n_leaves']
     n_all    = metadata['n_all']
 
@@ -126,10 +126,10 @@ def compute_loss(params, seqs, base_tree, metadata, verbose = False):
         t_ = update_tree(params, base_tree)
     
     
-    cost = compute_cost(seqs_,t_)
+    cost = compute_cost(seqs_,t_) # traversal cost
     tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
     
-    loss = cost + tree_force_loss + loop_loss + bidirection_loss
+    loss = cost + temp*(tree_force_loss + loop_loss + bidirection_loss)
 
     if(verbose):
         return cost, tree_force_loss, loop_loss, bidirection_loss, loss
