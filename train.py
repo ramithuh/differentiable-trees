@@ -6,6 +6,7 @@ if(os.path.exists('/content/sample_data')):
 
 import jax.numpy as jnp
 import jax.nn as nn
+
 import jax
 import optax
 import wandb
@@ -79,11 +80,13 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': 0.1,
-    'epochs': 50000,
+    'epochs': 2000,
+    'tLs':[0,0.02,1] #tree loss schedule
     }
 
 
 wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"])
+metadata['exp_name'] = None
 
 
 #### Generate a random sequence of 0s and 1s
@@ -146,16 +149,14 @@ print("parameters to optimize:", end = " -> ")
 print(params.keys())
 
 fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params, base_tree), n_all),n_leaves, True)
-compute_loss(params, seqs, base_tree, metadata)
+
+print(metadata)
+
+compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 
 
 #### Training loop
 for _ in range(metadata['epochs']):
-
-    ##=> sort of forward model (using params to generate new sequences and tree)
-    #=> Compute the gradients
-    grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata)
-
 
     ###~ Get the current discretized tree
     if(args['fix_tree']): 
@@ -168,14 +169,16 @@ for _ in range(metadata['epochs']):
 
     ###~ Get the current sequences as a plot
     if(args['fix_seqs']):
-        new_seq = seqs
+        seqs_ = seqs
     else:
-        new_seq = combine_to_seq(params, seqs, n_leaves, n_all, metadata['seq_temp'])
-    new_seq = px.imshow(new_seq, text_auto=True)
-
+        seqs_ = combine_to_seq(params, seqs, metadata['seq_temp'])
+    new_seq = px.imshow(seqs_, text_auto=True)
 
     ## Compute the loss and the metrics for loggings purposes
-    cost, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, verbose = True)
+    ##=> sort of forward model (using params to generate new sequences and tree)
+    #=> Compute the gradients
+    grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0])
+    cost, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
     ## Log the metrics
     wandb.log(
@@ -189,7 +192,8 @@ for _ in range(metadata['epochs']):
 
          "tree":wandb.Image(tree_at_epoch),
          "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
-         "Seq":wandb.data_types.Plotly(new_seq)})
+         "Seq":wandb.data_types.Plotly(new_seq),
+         "tLs":metadata['tLs'][0],})
 
     if(_%100==0):
         print("{:.5f}".format(loss,end = " \n"))
@@ -197,3 +201,6 @@ for _ in range(metadata['epochs']):
     #=> Update the parameters
     updates, opt_state = optimizer.update(grads, opt_state)
     params = optax.apply_updates(params, updates)
+
+    ### update the tree loss schedule
+    metadata['tLs'][0] = min(metadata['tLs'][2], metadata['tLs'][0] + metadata['tLs'][1])
