@@ -37,6 +37,7 @@ parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=Fal
 parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False, type = int)
 parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False, type = int)
 parser.add_argument('-s','--seed'        , help='seed'            , required=False, type = int)
+parser.add_argument('-tLs','--tree_loss_schedule' , help='tree loss schedule', required=False, type = str)
 
 
 ## what to train?
@@ -69,6 +70,8 @@ n_ancestors = n_leaves - 1
 n_all       = n_leaves + n_ancestors
 n_mutations = int(args['mutations']) if args['mutations']!=None else 3
 
+args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.02,1,50]
+ 
 metadata = {
     'n_all' : n_all,
     'n_leaves' : n_leaves, 
@@ -81,9 +84,9 @@ metadata = {
     'seq_temp': 0.5,
     'lr': 0.1,
     'epochs': 20000,
-    'tLs':[0,0.02,1,50] #tree loss schedule
+    'tLs': args['tree_loss_schedule'] # #tree loss schedule
     }
-
+print(metadata)
 
 wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"])
 metadata['exp_name'] = None
@@ -150,7 +153,7 @@ print(params.keys())
 
 fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params, base_tree), n_all),n_leaves, True)
 
-print(metadata)
+
 
 compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 
