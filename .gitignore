@@ -3,3 +3,4 @@ __pycache__/**
 wandb/*
 modules/__pycache__/**
 **/.ipynb_checkpoints/**
+viz-tools/media/**
