@@ -27,7 +27,7 @@ def update_tree(params, base_tree):
     return t
 
 @jit
-def combine_to_seq(params, seqs, temperature = 1):
+def update_seq(params, seqs, temperature = 1):
     n_all = seqs.shape[0]
     n_leaves = (n_all + 1)//2
 
@@ -105,9 +105,9 @@ def compute_cost(sequences, tree, verbose = False, average = True):
     
     #method 2:
     if(average):
-        ans = abs(selection - sequences).sum() ## works currently as sm is the basic config. need to think about extending
+        ans = nn.sigmoid(abs(selection - sequences)).sum() ## works currently as sm is the basic config. need to think about extending
     else:
-        ans = jnp.sum(abs(selection - sequences), axis = 1)
+        ans = jnp.sum(nn.sigmoid(abs(selection - sequences)*100), axis = 1)
     
     return ans
 
@@ -118,7 +118,7 @@ def compute_loss(params, seqs, base_tree, metadata, temp, verbose = False):
     if(metadata['args']['fix_seqs']):
         seqs_ = seqs
     else:
-        seqs_ = combine_to_seq(params, seqs, metadata['seq_temp'] )
+        seqs_ = update_seq(params, seqs, metadata['seq_temp'] )
     
     if(metadata['args']['fix_tree']):
         t_ = base_tree
