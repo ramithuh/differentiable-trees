@@ -2,6 +2,8 @@ import math
 import jax.numpy as jnp
 from jax import vmap
 from jax import random
+from jax import jit
+from functools import partial
 
 target_depth = 0
 num_mutations = 0
@@ -32,10 +34,7 @@ def mutate(key, exclude_indexes):
 def create_seq(key, seq, depth):
 
   k1, k2 = random.split(key)
-
-  print()
   
-
   if(depth > target_depth):
     return
 
@@ -53,19 +52,15 @@ def create_seq(key, seq, depth):
 
 
   #seq
-  print((depth+1)*'|--->',end="")
-  print(list(seq_1.tolist()))
   sequences[depth].append(seq_1)
   create_seq(k1, seq_1, depth+1)
   
-
   #new_seq
-  print((depth+1)*'|--->',end="")
-  print(list(seq_2.tolist()))
   sequences[depth].append(seq_2)
   create_seq(k2, seq_2, depth+1)
 
-def generate_groundtruth(metadata, seed = 42):
+
+def generate_groundtruth(metadata, seed = 42, verbose = False):
     key = random.PRNGKey(seed)
 
     global target_depth
@@ -74,30 +69,25 @@ def generate_groundtruth(metadata, seed = 42):
     global n_letters
 
     num_mutations = metadata['n_mutations']
-    n_all = metadata['n_all']
-    n_leaves = metadata['n_leaves']
+    n_all       = metadata['n_all']
+    n_leaves    = metadata['n_leaves']
     n_ancestors = metadata['n_ancestors']
     seq_length  = metadata['seq_length']
     n_letters   = metadata['n_letters']
 
     target_depth = int(math.log2(n_leaves))-1
 
-    #seq = [0 for x in range(seq_length)]
     seq = jnp.zeros(seq_length, dtype=jnp.int32)
 
     sequences = [[] for x in range(target_depth + 1)]
-    print(sequences)
+    create_seq(key,seq,0)
 
-    create_seq(key, seq,0)
-
-    print(len(sequences[target_depth]))
+    if(verbose):
+      print(len(sequences[target_depth]))
 
     ### copy the leaves
     masked_main = sequences[target_depth].copy()
     true_main   = sequences[target_depth].copy()
-
-    print(masked_main)
-
 
     n_leaves    = len(masked_main)
     n_ancestors = n_leaves - 1
@@ -106,19 +96,21 @@ def generate_groundtruth(metadata, seed = 42):
     for i in range(0,n_ancestors):
         masked_main.append(seq)
 
+    ## Generate the true sequences by traversing through the leaves to the root
     for i in range(len(sequences)-2, -1, -1):
         for k in range(0,len(sequences[i])):
             true_main.append(sequences[i][k])
     true_main.append(seq)
 
-    i = 0
-    for item in true_main:
-      print(">seq"+str(i))
-      for char in item:
-        print(char, end="")
-      print()
+    if(verbose):
+      i = 0
+      for item in true_main:
+        print(">seq"+str(i))
+        for char in item:
+          print(char, end="")
+        print()
 
-      i+=1
+        i+=1
 
     tree = []
 
