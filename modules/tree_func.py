@@ -105,7 +105,8 @@ def compute_cost(sequences, tree, verbose = False, average = True):
     
     #method 2:
     if(average):
-        ans = nn.sigmoid(abs(selection - sequences)).sum() ## works currently as sm is the basic config. need to think about extending
+        ans = ((nn.sigmoid((abs(selection - sequences)*100)) - 0.5)*2).sum()
+        #ans = nn.sigmoid(abs(selection - sequences)*100).sum() ## works currently as sm is the basic config. need to think about extending
     else:
         ans = jnp.sum(nn.sigmoid(abs(selection - sequences)*100), axis = 1)
     
