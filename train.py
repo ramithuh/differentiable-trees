@@ -69,6 +69,7 @@ n_leaves    = int(args['leaves']) if args['leaves']!=None else 4
 n_ancestors = n_leaves - 1
 n_all       = n_leaves + n_ancestors
 n_mutations = int(args['mutations']) if args['mutations']!=None else 3
+n_letters   = 2
 
 args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.02,1,50]
  
@@ -77,6 +78,7 @@ metadata = {
     'n_leaves' : n_leaves, 
     'n_ancestors' : n_ancestors,
     'seq_length' : seq_length,
+    'n_letters' : n_letters,
     'n_mutations' : n_mutations,
     'args': args,
     'exp_name' : f"l={n_leaves}, m={n_mutations}, s={seq_length}, fs={args['fix_seqs']}, ft={args['fix_tree']}" ,
@@ -94,7 +96,7 @@ metadata['exp_name'] = None
 
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])
-seqs = jax.random.randint(key, shape = (n_all, seq_length), minval = 0, maxval = 2).astype(jnp.float32)
+seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 0, maxval = 2).astype(jnp.float32)
 
 #### Generate a base tree
 base_tree = jnp.zeros((n_all, n_all))
@@ -174,7 +176,7 @@ for _ in range(metadata['epochs']):
     if(args['fix_seqs']):
         seqs_ = seqs
     else:
-        seqs_ = combine_to_seq(params, seqs, metadata['seq_temp'])
+        seqs_ = update_seq(params, seqs, metadata['seq_temp'])
     new_seq = px.imshow(seqs_, text_auto=True)
 
     ## Compute the loss and the metrics for loggings purposes
