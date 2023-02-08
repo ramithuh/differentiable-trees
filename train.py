@@ -106,6 +106,9 @@ base_tree = jnp.zeros((n_all, n_all))
 if(args['groundtruth']):
     seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
 
+    seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.float32)
+    gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.float32)
+
     #if we don't want sequences to change, set seqs to gt_seqs
     if(args['fix_seqs'] or args['initialize_seq']):
         seqs = gt_seqs
@@ -115,7 +118,7 @@ if(args['groundtruth']):
         base_tree = tree
 
     gt_tree = show_graph_with_labels(tree, n_leaves, True)
-    gt_seqs_plot = px.imshow(gt_seqs, text_auto=True)
+    gt_seqs_plot = px.imshow(jnp.argmax(gt_seqs, axis = 2), text_auto=True)
 
     gt_cost           = compute_cost(gt_seqs, tree, metadata, surrogate_loss = False)
     gt_cost_surrogate = compute_cost(gt_seqs, tree, metadata)
@@ -181,7 +184,7 @@ for _ in range(metadata['epochs']):
         seqs_ = seqs
     else:
         seqs_ = update_seq(params, seqs, metadata['seq_temp'])
-    new_seq = px.imshow(seqs_, text_auto=True)
+    new_seq = px.imshow(jnp.argmax(seqs_, axis = 2), text_auto=True)
 
     ## Compute the loss and the metrics for loggings purposes
     ##=> sort of forward model (using params to generate new sequences and tree)
