@@ -193,7 +193,7 @@ for _ in range(metadata['epochs']):
     cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
     ## Log the metrics
-    if(_%20==0)
+    if(_%20==0):
         wandb.log(
             {"epoch":_, 
 
