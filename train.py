@@ -36,6 +36,7 @@ parser.set_defaults(groundtruth=True)
 parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False, type = int)
 parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False, type = int)
 parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False, type = int)
+parser.add_argument('-nl','--letters'    , help='# of letters?'    , required=False, type = int)
 parser.add_argument('-s','--seed'        , help='seed'            , required=False, type = int)
 parser.add_argument('-tLs','--tree_loss_schedule' , help='tree loss schedule', required=False, type = str)
 
@@ -69,7 +70,7 @@ n_leaves    = int(args['leaves']) if args['leaves']!=None else 4
 n_ancestors = n_leaves - 1
 n_all       = n_leaves + n_ancestors
 n_mutations = int(args['mutations']) if args['mutations']!=None else 3
-n_letters   = 2
+n_letters   = int(args['letters']) if args['letters']!=None else 2
 
 args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.02,1,50]
  
@@ -116,7 +117,9 @@ if(args['groundtruth']):
     gt_tree = show_graph_with_labels(tree, n_leaves, True)
     gt_seqs_plot = px.imshow(gt_seqs, text_auto=True)
 
-    gt_cost = compute_cost(gt_seqs,tree)
+    gt_cost           = compute_cost(gt_seqs, tree, metadata, surrogate_loss = False)
+    gt_cost_surrogate = compute_cost(gt_seqs, tree, metadata)
+    
     gt_tree_force_loss, gt_loop_loss, gt_bidirection_loss = enforce_graph(tree, 10, metadata)
 
     wandb.log({
@@ -126,6 +129,7 @@ if(args['groundtruth']):
         "Groundtruth Tree Force Loss" : gt_tree_force_loss,
         "Groundtruth Loop Loss" : gt_loop_loss,
         "Groundtruth Bidirection Loss" : gt_bidirection_loss,
+        "Groundtruth Traversal Cost (surrogate)" : gt_cost_surrogate,
         "Groundtruth Traversal Cost" : gt_cost,
         "Groundtruth Total Loss" : gt_tree_force_loss + gt_loop_loss + gt_bidirection_loss + gt_cost
         })
@@ -183,7 +187,7 @@ for _ in range(metadata['epochs']):
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
     grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0])
-    cost, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
+    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
     ## Log the metrics
     wandb.log(
@@ -191,6 +195,7 @@ for _ in range(metadata['epochs']):
 
          "loss":loss,
          "traversal cost": cost,
+         "traversal cost (surrogate)": cost_surrogate,
          "tree force loss": tree_force_loss,
          "loop loss": loop_loss,
          "bidirection loss": bidirection_loss,
