@@ -70,7 +70,7 @@ n_leaves    = int(args['leaves']) if args['leaves']!=None else 4
 n_ancestors = n_leaves - 1
 n_all       = n_leaves + n_ancestors
 n_mutations = int(args['mutations']) if args['mutations']!=None else 3
-n_letters   = int(args['letters']) if args['letters']!=None else 2
+n_letters   = int(args['letters']) if args['letters']!=None else 21
 
 args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.02,1,50]
  
@@ -86,7 +86,7 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': 0.1,
-    'epochs': 20000,
+    'epochs': 10000,
     'tLs': args['tree_loss_schedule'] # #tree loss schedule
     }
 print(metadata)
@@ -193,20 +193,21 @@ for _ in range(metadata['epochs']):
     cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
     ## Log the metrics
-    wandb.log(
-        {"epoch":_, 
+    if(_%20==0)
+        wandb.log(
+            {"epoch":_, 
 
-         "loss":loss,
-         "traversal cost": cost,
-         "traversal cost (surrogate)": cost_surrogate,
-         "tree force loss": tree_force_loss,
-         "loop loss": loop_loss,
-         "bidirection loss": bidirection_loss,
+            "loss":loss,
+            "traversal cost": cost,
+            "traversal cost (surrogate)": cost_surrogate,
+            "tree force loss": tree_force_loss,
+            "loop loss": loop_loss,
+            "bidirection loss": bidirection_loss,
 
-         "tree":wandb.Image(tree_at_epoch),
-         "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
-         "Seq":wandb.data_types.Plotly(new_seq),
-         "tLs":metadata['tLs'][0],})
+            "tree":wandb.Image(tree_at_epoch),
+            "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
+            "Seq":wandb.data_types.Plotly(new_seq),
+            "tLs":metadata['tLs'][0],})
 
     if(_%100==0):
         print("{:.5f}".format(loss,end = " \n"))
