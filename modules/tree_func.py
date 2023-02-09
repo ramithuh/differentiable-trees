@@ -34,7 +34,7 @@ def update_seq(params, seqs, temperature = 1):
     for i in range(0, n_all - n_leaves):
         key = str(i) #chr(97+i + n_leaves)
         
-        seq      = nn.sigmoid(temperature*params[key])
+        seq      = nn.softmax(temperature*params[key])
         hard_seq = (seq > 0.5).astype(int)
         
         seqs = seqs.at[- n_leaves + i + 1].set(seq)

@@ -151,7 +151,7 @@ if(args['initialize_tree']):
 
 #### Add the ancestor sequences to the parameters
 for i in range(0, n_ancestors):
-    params[str(i)] = jax.random.normal(key, (seq_length,))
+    params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
 
 #### Initialize the optimizer
 opt_state = optimizer.init(params)
