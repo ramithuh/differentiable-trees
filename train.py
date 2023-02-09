@@ -97,7 +97,7 @@ metadata['exp_name'] = None
 
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])
-seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 0, maxval = 2).astype(jnp.float32)
+seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 0, maxval = 2).astype(jnp.bfloat16)
 
 #### Generate a base tree
 base_tree = jnp.zeros((n_all, n_all))
@@ -106,8 +106,8 @@ base_tree = jnp.zeros((n_all, n_all))
 if(args['groundtruth']):
     seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
 
-    seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.float32)
-    gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.float32)
+    seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.bfloat16)
+    gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.bfloat16)
 
     #if we don't want sequences to change, set seqs to gt_seqs
     if(args['fix_seqs'] or args['initialize_seq']):
