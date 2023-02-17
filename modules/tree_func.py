@@ -123,7 +123,7 @@ def compute_cost(sequences, tree, metadata, verbose = False, surrogate_loss = Tr
     return ans
 
 
-def DFS(curr, tree, visited, conflicts, verbose=False):
+def DFS(curr, tree, path_prob, visited, conflicts, verbose=False):
   '''
     Runs DFS on the tree and returns the visited nodes and the conflicts
 
@@ -142,22 +142,25 @@ def DFS(curr, tree, visited, conflicts, verbose=False):
   lis = tree
 
   if(verbose):
-    print("came to -> ", curr)
+    print("came to -> ", curr, " with path prob ", path_prob)
 
   ind = jnp.argpartition(lis[:,curr], -2)[-2:]
 
   if(verbose):
-    print("going to visit -> ", ind, " with probs : ", lis[:,curr][ind])
+    print("going to visit -> ", ind, " with probs : ", lis[:,curr][ind]*path_prob, " conflicts : ", conflicts)
   
   for j in range(0,2):
     i = ind[j]
 
-    if(visited[i] > 0):
-      conflicts += lis[:,curr][i]
+    if(visited[i] > 0): ## this is not general
+      conflicts += lis[:,curr][i]*path_prob*visited[i]
+      visited[i] = max(lis[:,curr][i]*(path_prob),visited[i]) ##even if it's visited with a low probability, need to update
     else:
-      visited[i] = lis[:,curr][i]
-      visited, conflicts = DFS(i, tree, visited, conflicts, verbose)
+      visited[i] = lis[:,curr][i]*(path_prob + 1e-10)
+      visited, conflicts = DFS(i, tree, lis[:,curr][i]*path_prob,  visited, conflicts, verbose)
 
+  if(verbose):
+    print("## came back to -> ", curr,  " conflicts : ", conflicts)
   
   return visited, conflicts
 
@@ -178,9 +181,10 @@ def compute_cost_recursive(tree, verbose=False):
   visited = [0] * tree.shape[0]
   visited[-1] = 1
 
-  visited, conflicts = DFS(tree.shape[0] - 1, tree, visited, 0, verbose)
+  visited, conflicts = DFS(tree.shape[0] - 1, tree, 1, visited, 0, verbose)
 
   if(verbose):
+    print(" Visited nodes : ", jnp.asarray(visited))
     print(tree.shape[0] - sum(visited),conflicts)
   
   #print(params['t'].shape[0] - sum(visited), conflicts)
