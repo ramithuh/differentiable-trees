@@ -191,7 +191,7 @@ for _ in range(metadata['epochs']):
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
     grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0])
-    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
+    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
     ## Log the metrics
     if(_%100==0):
@@ -203,6 +203,7 @@ for _ in range(metadata['epochs']):
             "traversal cost (surrogate)": cost_surrogate,
             "tree force loss": tree_force_loss,
             "loop loss": loop_loss,
+            "recusive loss": recurse_cost,
             "bidirection loss": bidirection_loss,
 
             "tree":wandb.Image(tree_at_epoch),
