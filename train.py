@@ -170,21 +170,22 @@ compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 #### Training loop
 for _ in range(metadata['epochs']):
 
-    ###~ Get the current discretized tree
-    if(args['fix_tree']): 
-        t_ = base_tree
-    else:
-        t_ = update_tree(params, base_tree)
-    t_d           = discretize_tree_topology(t_,n_all)
-    tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, True)
-    tree_matrix_at_epoch = px.imshow(t_, text_auto=True)
+    if(_%100==0):
+        ###~ Get the current discretized tree
+        if(args['fix_tree']): 
+            t_ = base_tree
+        else:
+            t_ = update_tree(params, base_tree)
+        t_d           = discretize_tree_topology(t_,n_all)
+        tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, True)
+        tree_matrix_at_epoch = px.imshow(t_, text_auto=True)
 
-    ###~ Get the current sequences as a plot
-    if(args['fix_seqs']):
-        seqs_ = seqs
-    else:
-        seqs_ = update_seq(params, seqs, metadata['seq_temp'])
-    new_seq = px.imshow(jnp.argmax(seqs_, axis = 2), text_auto=True)
+        ###~ Get the current sequences as a plot
+        if(args['fix_seqs']):
+            seqs_ = seqs
+        else:
+            seqs_ = update_seq(params, seqs, metadata['seq_temp'])
+        new_seq = px.imshow(jnp.argmax(seqs_, axis = 2), text_auto=True)
 
     ## Compute the loss and the metrics for loggings purposes
     ##=> sort of forward model (using params to generate new sequences and tree)
@@ -193,7 +194,7 @@ for _ in range(metadata['epochs']):
     cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
     ## Log the metrics
-    if(_%20==0):
+    if(_%100==0):
         wandb.log(
             {"epoch":_, 
 
