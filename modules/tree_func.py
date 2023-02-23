@@ -34,7 +34,7 @@ def update_seq(params, seqs, temperature = 1):
     for i in range(0, n_all - n_leaves):
         key = str(i) #chr(97+i + n_leaves)
         
-        seq      = nn.sigmoid(temperature*params[key])
+        seq      = nn.softmax(temperature*params[key])
         hard_seq = (seq > 0.5).astype(int)
         
         seqs = seqs.at[- n_leaves + i + 1].set(seq)
@@ -91,12 +91,19 @@ def enforce_graph(t_, s, metadata = None, verbose = False):
     
     return tree_force_loss, loop_loss, bidirection_loss
 
-@jit
+
 def compute_cost(sequences, tree, metadata, verbose = False, surrogate_loss = True):
     if(verbose==True):
         show_graph_with_labels(discretize_tree_topology(tree, n_all),n_leaves)
         
-    selection = jnp.matmul(tree,sequences)
+    seq_onehot = jnp.transpose(sequences, (2,0,1)) #bring onehot encoding to the front
+    sel        = jnp.expand_dims(tree, axis = 0)   # make it (1, n_all, n_all)
+
+    selection = jnp.matmul(sel, seq_onehot)
+
+    selection_ = jnp.matmul(tree, jnp.argmax(sequences, axis = 2))
+    sequences_ = jnp.argmax(sequences, axis = 2)
+    
     # print(selection)
     
     #method 1: (downside needs integers as we are indexing)
@@ -105,10 +112,13 @@ def compute_cost(sequences, tree, metadata, verbose = False, surrogate_loss = Tr
     
     #method 2:
     if(surrogate_loss):
-        ans = ((nn.sigmoid((abs(selection - sequences))) - 0.5)*2).sum() ## works currently as sm is the basic config. need to think about extending
+        out = jnp.transpose(selection, (1,2,0))
+        ans = (jnp.sum(abs((out - sequences)), axis = [1,2])/(2)).sum()
+
+        #ans = ((nn.sigmoid((abs(selection - sequences))) - 0.5)*2).sum() ## works currently as sm is the basic config. need to think about extending
     else:
         sm = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters'])
-        ans = sm[jnp.round(selection).astype(jnp.int32),jnp.round(sequences).astype(jnp.int32)].sum()
+        ans = sm[jnp.round(selection_).astype(jnp.int32),jnp.round(sequences_).astype(jnp.int32)].sum()
 
     return ans
 

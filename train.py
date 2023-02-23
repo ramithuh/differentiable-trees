@@ -70,7 +70,7 @@ n_leaves    = int(args['leaves']) if args['leaves']!=None else 4
 n_ancestors = n_leaves - 1
 n_all       = n_leaves + n_ancestors
 n_mutations = int(args['mutations']) if args['mutations']!=None else 3
-n_letters   = int(args['letters']) if args['letters']!=None else 2
+n_letters   = int(args['letters']) if args['letters']!=None else 21
 
 args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.02,1,50]
  
@@ -86,7 +86,7 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': 0.1,
-    'epochs': 20000,
+    'epochs': 10000,
     'tLs': args['tree_loss_schedule'] # #tree loss schedule
     }
 print(metadata)
@@ -97,7 +97,7 @@ metadata['exp_name'] = None
 
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])
-seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 0, maxval = 2).astype(jnp.float32)
+seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 0, maxval = 2).astype(jnp.bfloat16)
 
 #### Generate a base tree
 base_tree = jnp.zeros((n_all, n_all))
@@ -105,6 +105,9 @@ base_tree = jnp.zeros((n_all, n_all))
 
 if(args['groundtruth']):
     seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
+
+    seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.bfloat16)
+    gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.bfloat16)
 
     #if we don't want sequences to change, set seqs to gt_seqs
     if(args['fix_seqs'] or args['initialize_seq']):
@@ -115,7 +118,7 @@ if(args['groundtruth']):
         base_tree = tree
 
     gt_tree = show_graph_with_labels(tree, n_leaves, True)
-    gt_seqs_plot = px.imshow(gt_seqs, text_auto=True)
+    gt_seqs_plot = px.imshow(jnp.argmax(gt_seqs, axis = 2), text_auto=True)
 
     gt_cost           = compute_cost(gt_seqs, tree, metadata, surrogate_loss = False)
     gt_cost_surrogate = compute_cost(gt_seqs, tree, metadata)
@@ -148,7 +151,7 @@ if(args['initialize_tree']):
 
 #### Add the ancestor sequences to the parameters
 for i in range(0, n_ancestors):
-    params[str(i)] = jax.random.normal(key, (seq_length,))
+    params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
 
 #### Initialize the optimizer
 opt_state = optimizer.init(params)
@@ -181,7 +184,7 @@ for _ in range(metadata['epochs']):
         seqs_ = seqs
     else:
         seqs_ = update_seq(params, seqs, metadata['seq_temp'])
-    new_seq = px.imshow(seqs_, text_auto=True)
+    new_seq = px.imshow(jnp.argmax(seqs_, axis = 2), text_auto=True)
 
     ## Compute the loss and the metrics for loggings purposes
     ##=> sort of forward model (using params to generate new sequences and tree)
@@ -190,20 +193,21 @@ for _ in range(metadata['epochs']):
     cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
     ## Log the metrics
-    wandb.log(
-        {"epoch":_, 
+    if(_%20==0):
+        wandb.log(
+            {"epoch":_, 
 
-         "loss":loss,
-         "traversal cost": cost,
-         "traversal cost (surrogate)": cost_surrogate,
-         "tree force loss": tree_force_loss,
-         "loop loss": loop_loss,
-         "bidirection loss": bidirection_loss,
+            "loss":loss,
+            "traversal cost": cost,
+            "traversal cost (surrogate)": cost_surrogate,
+            "tree force loss": tree_force_loss,
+            "loop loss": loop_loss,
+            "bidirection loss": bidirection_loss,
 
-         "tree":wandb.Image(tree_at_epoch),
-         "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
-         "Seq":wandb.data_types.Plotly(new_seq),
-         "tLs":metadata['tLs'][0],})
+            "tree":wandb.Image(tree_at_epoch),
+            "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
+            "Seq":wandb.data_types.Plotly(new_seq),
+            "tLs":metadata['tLs'][0],})
 
     if(_%100==0):
         print("{:.5f}".format(loss,end = " \n"))

@@ -125,4 +125,4 @@ def generate_groundtruth(metadata, seed = 42, verbose = False):
         leave[iter] = 1
         tree.append(leave)
 
-    return jnp.array(masked_main).astype(jnp.float32), jnp.array(true_main).astype(jnp.float32), jnp.array(tree).astype(jnp.float32)
+    return jnp.array(masked_main).astype(jnp.bfloat16), jnp.array(true_main).astype(jnp.bfloat16), jnp.array(tree).astype(jnp.bfloat16)
