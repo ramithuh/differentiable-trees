@@ -32,6 +32,8 @@ parser = argparse.ArgumentParser(description='Train a differentiable tree model.
 parser.add_argument('-gt', '--groundtruth', action='store_true', help='Retrieve groundtruth?')
 parser.set_defaults(groundtruth=True)
 
+
+parser.add_argument('-n','--notes'       , help='notes'            , required=False, type = str, default = '')
 #tree and seq generate parameters
 parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False, type = int)
 parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False, type = int)
@@ -91,9 +93,12 @@ metadata = {
     }
 print(metadata)
 
-wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"])
-metadata['exp_name'] = None
+wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"], notes = args['notes'])
 
+## JAX Doesn't like some data types when jitting
+metadata['exp_name'] = None
+metadata['args']['notes'] = None
+args['notes'] = None
 
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])
@@ -212,6 +217,7 @@ for _ in range(metadata['epochs']):
             "tLs":metadata['tLs'][0],})
 
     if(_%100==0):
+        print(metadata['tLs'][0], end = " ")
         print("{:.5f}".format(loss,end = " \n"))
     
     #=> Update the parameters
