@@ -142,7 +142,7 @@ def DFS(curr, tree, path_prob, visited,depth, verbose=False ):
     print("-"*depth, "came to -> ", curr, " with path prob ", path_prob)
 
   ind = jnp.argpartition(tree[:-1,curr], -1)[-2:][::-1] #maxpool choice
-  sel_ind = ind[tree[:-1,curr][ind] > 0.5]
+  sel_ind = ind[tree[:-1,curr][ind] > 0.8]
 
   if(verbose):
     print("-"*depth, "🏃🏻‍♂️ going to visit -> ", sel_ind, " with probs : ", tree[:,curr][sel_ind])
@@ -220,7 +220,7 @@ def compute_loss(params, seqs, base_tree, metadata, temp, verbose = False):
     
     tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
     
-    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost)
+    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost*1000)
 
     if(verbose):
         cost           = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
