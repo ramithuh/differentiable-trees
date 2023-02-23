@@ -32,6 +32,8 @@ parser = argparse.ArgumentParser(description='Train a differentiable tree model.
 parser.add_argument('-gt', '--groundtruth', action='store_true', help='Retrieve groundtruth?')
 parser.set_defaults(groundtruth=True)
 
+
+parser.add_argument('-n','--notes'       , help='notes'            , required=False, type = str, default = '')
 #tree and seq generate parameters
 parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False, type = int)
 parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False, type = int)
@@ -91,9 +93,12 @@ metadata = {
     }
 print(metadata)
 
-wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"])
-metadata['exp_name'] = None
+wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"], notes = args['notes'])
 
+## JAX Doesn't like some data types when jitting
+metadata['exp_name'] = None
+metadata['args']['notes'] = None
+args['notes'] = None
 
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])
@@ -170,30 +175,31 @@ compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 #### Training loop
 for _ in range(metadata['epochs']):
 
-    ###~ Get the current discretized tree
-    if(args['fix_tree']): 
-        t_ = base_tree
-    else:
-        t_ = update_tree(params, base_tree)
-    t_d           = discretize_tree_topology(t_,n_all)
-    tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, True)
-    tree_matrix_at_epoch = px.imshow(t_, text_auto=True)
+    if(_%100==0):
+        ###~ Get the current discretized tree
+        if(args['fix_tree']): 
+            t_ = base_tree
+        else:
+            t_ = update_tree(params, base_tree)
+        t_d           = discretize_tree_topology(t_,n_all)
+        tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, True)
+        tree_matrix_at_epoch = px.imshow(t_, text_auto=True)
 
-    ###~ Get the current sequences as a plot
-    if(args['fix_seqs']):
-        seqs_ = seqs
-    else:
-        seqs_ = update_seq(params, seqs, metadata['seq_temp'])
-    new_seq = px.imshow(jnp.argmax(seqs_, axis = 2), text_auto=True)
+        ###~ Get the current sequences as a plot
+        if(args['fix_seqs']):
+            seqs_ = seqs
+        else:
+            seqs_ = update_seq(params, seqs, metadata['seq_temp'])
+        new_seq = px.imshow(jnp.argmax(seqs_, axis = 2), text_auto=True)
 
     ## Compute the loss and the metrics for loggings purposes
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
     grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0])
-    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
+    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
     ## Log the metrics
-    if(_%20==0):
+    if(_%100==0):
         wandb.log(
             {"epoch":_, 
 
@@ -202,6 +208,7 @@ for _ in range(metadata['epochs']):
             "traversal cost (surrogate)": cost_surrogate,
             "tree force loss": tree_force_loss,
             "loop loss": loop_loss,
+            "recusive loss": recurse_cost,
             "bidirection loss": bidirection_loss,
 
             "tree":wandb.Image(tree_at_epoch),
@@ -210,6 +217,7 @@ for _ in range(metadata['epochs']):
             "tLs":metadata['tLs'][0],})
 
     if(_%100==0):
+        print(metadata['tLs'][0], end = " ")
         print("{:.5f}".format(loss,end = " \n"))
     
     #=> Update the parameters

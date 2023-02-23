@@ -122,6 +122,83 @@ def compute_cost(sequences, tree, metadata, verbose = False, surrogate_loss = Tr
 
     return ans
 
+def DFS(curr, tree, path_prob, visited,depth, verbose=False ):
+  '''
+    Runs DFS on the tree and returns the visited nodes and the conflicts
+    Args:
+        curr: current node
+        tree: tree topology matrix (adjacency matrix)
+        visited: list of visited nodes
+        conflicts: number of conflicts
+        verbose: print the visited nodes
+    Returns:
+        visited: list of visited nodes
+        conflicts: number of conflicts
+  '''
+
+  
+
+  if(verbose):
+    print("-"*depth, "came to -> ", curr, " with path prob ", path_prob)
+
+  ind = jnp.argpartition(tree[:-1,curr], -1)[-2:][::-1] #maxpool choice
+  sel_ind = ind[tree[:-1,curr][ind] > 0.8]
+
+  if(verbose):
+    print("-"*depth, "🏃🏻‍♂️ going to visit -> ", sel_ind, " with probs : ", tree[:,curr][sel_ind])
+  
+  for j in range(0,sel_ind.shape[0]):
+    i = sel_ind[j]
+
+    #print("-"*depth, "visiting -> ", i, " with probs : ", lis[:,curr][i])
+
+    if(visited[i] > 0): ## this is not general
+      #conflicts[i] += tree[:,curr][i]*path_prob #*visited[i]    #scale by visited probability came form some node
+      visited[i]    = visited[i] + tree[:,curr][i]*(path_prob) ##even if it's visited with a low probability, need to update
+    else:
+      visited[i]    = visited[i] + tree[:,curr][i]*(path_prob + 1e-10)
+      visited = DFS(i, tree, tree[:,curr][i]*path_prob,  visited,  depth+1, verbose)
+
+  if(verbose):
+    print("-"*depth, "## came back to -> ", curr)
+  
+  return visited
+
+
+def compute_cost_recursive(tree, verbose=False):
+  '''
+    Computes the two costs of the tree
+        loops (measured by conflicts)
+        unvisited nodes
+
+    Args:
+        tree: tree adjacency matrix
+        verbose: print the visited nodes
+
+    Returns:
+        loops + unvisited nodes
+  '''
+
+  visited = [0] * tree.shape[0]
+  visited[-1] = 1
+
+  visited = DFS(tree.shape[0] - 1, tree, 1, visited, 0, verbose = verbose)
+
+  if(verbose):
+    print("\n\n#######")
+    print(" Visited nodes : ", jnp.asarray(visited))
+    #print(" Conflicts : ", jnp.asarray(conflicts))
+    print("#######\n\n")
+
+    #print(params['t'].shape[0] - sum(visited),conflicts)
+
+    print("\nDistance from prototype -> ", jnp.array(visited) - 1, " --> total ", abs(jnp.array(visited) - 1).sum() )
+    # print("Total Conflicts --> ", jnp.array(conflicts).sum() )
+  
+  #print(params['t'].shape[0] - sum(visited)/, conflicts)
+  return abs(jnp.array(visited) - 1).sum() #params['t'].shape[0] - sum(visited) +  conflicts
+
+
 def compute_loss(params, seqs, base_tree, metadata, temp, verbose = False):
     n_leaves = metadata['n_leaves']
     n_all    = metadata['n_all']
@@ -137,6 +214,8 @@ def compute_loss(params, seqs, base_tree, metadata, temp, verbose = False):
         t_ = update_tree(params, base_tree)
     
     
+    recurse_cost = -1 #compute_cost_recursive(t_, verbose = False)
+
     cost_surrogate = compute_cost(seqs_,t_, metadata) # surrogate traversal cost
     
     tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
@@ -145,6 +224,6 @@ def compute_loss(params, seqs, base_tree, metadata, temp, verbose = False):
 
     if(verbose):
         cost           = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
-        return cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, loss
+        return cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss
 
     return loss
