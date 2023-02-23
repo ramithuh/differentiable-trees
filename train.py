@@ -36,6 +36,7 @@ parser.set_defaults(groundtruth=True)
 parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False, type = int)
 parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False, type = int)
 parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False, type = int)
+parser.add_argument('-nl','--letters'    , help='# of letters?'    , required=False, type = int)
 parser.add_argument('-s','--seed'        , help='seed'            , required=False, type = int)
 parser.add_argument('-tLs','--tree_loss_schedule' , help='tree loss schedule', required=False, type = str)
 
@@ -69,6 +70,7 @@ n_leaves    = int(args['leaves']) if args['leaves']!=None else 4
 n_ancestors = n_leaves - 1
 n_all       = n_leaves + n_ancestors
 n_mutations = int(args['mutations']) if args['mutations']!=None else 3
+n_letters   = int(args['letters']) if args['letters']!=None else 2
 
 args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.02,1,50]
  
@@ -77,6 +79,7 @@ metadata = {
     'n_leaves' : n_leaves, 
     'n_ancestors' : n_ancestors,
     'seq_length' : seq_length,
+    'n_letters' : n_letters,
     'n_mutations' : n_mutations,
     'args': args,
     'exp_name' : f"l={n_leaves}, m={n_mutations}, s={seq_length}, fs={args['fix_seqs']}, ft={args['fix_tree']}" ,
@@ -94,7 +97,7 @@ metadata['exp_name'] = None
 
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])
-seqs = jax.random.randint(key, shape = (n_all, seq_length), minval = 0, maxval = 2).astype(jnp.float32)
+seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 0, maxval = 2).astype(jnp.float32)
 
 #### Generate a base tree
 base_tree = jnp.zeros((n_all, n_all))
@@ -114,7 +117,9 @@ if(args['groundtruth']):
     gt_tree = show_graph_with_labels(tree, n_leaves, True)
     gt_seqs_plot = px.imshow(gt_seqs, text_auto=True)
 
-    gt_cost = compute_cost(gt_seqs,tree)
+    gt_cost           = compute_cost(gt_seqs, tree, metadata, surrogate_loss = False)
+    gt_cost_surrogate = compute_cost(gt_seqs, tree, metadata)
+    
     gt_tree_force_loss, gt_loop_loss, gt_bidirection_loss = enforce_graph(tree, 10, metadata)
 
     wandb.log({
@@ -124,6 +129,7 @@ if(args['groundtruth']):
         "Groundtruth Tree Force Loss" : gt_tree_force_loss,
         "Groundtruth Loop Loss" : gt_loop_loss,
         "Groundtruth Bidirection Loss" : gt_bidirection_loss,
+        "Groundtruth Traversal Cost (surrogate)" : gt_cost_surrogate,
         "Groundtruth Traversal Cost" : gt_cost,
         "Groundtruth Total Loss" : gt_tree_force_loss + gt_loop_loss + gt_bidirection_loss + gt_cost
         })
@@ -174,14 +180,14 @@ for _ in range(metadata['epochs']):
     if(args['fix_seqs']):
         seqs_ = seqs
     else:
-        seqs_ = combine_to_seq(params, seqs, metadata['seq_temp'])
+        seqs_ = update_seq(params, seqs, metadata['seq_temp'])
     new_seq = px.imshow(seqs_, text_auto=True)
 
     ## Compute the loss and the metrics for loggings purposes
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
     grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0])
-    cost, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
+    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
     ## Log the metrics
     wandb.log(
@@ -189,6 +195,7 @@ for _ in range(metadata['epochs']):
 
          "loss":loss,
          "traversal cost": cost,
+         "traversal cost (surrogate)": cost_surrogate,
          "tree force loss": tree_force_loss,
          "loop loss": loop_loss,
          "bidirection loss": bidirection_loss,
