@@ -24,7 +24,15 @@ import plotly.express as px
 rc('animation', html='jshtml')
 
 
+def invert_dict(dictionary):
+  new_dict = dictionary
+  for key in dictionary.keys():
+    if(new_dict[key] == 'fixed'):
+      new_dict[key] = 'learn'
+    else:
+      new_dict[key] = 'fixed'
 
+  return new_dict
 
 #### Parse arguments
 parser = argparse.ArgumentParser(description='Train a differentiable tree model. \n sample usage :  python train.py -l 8 -m 10 -sl 50 -fs')
@@ -55,6 +63,9 @@ parser.set_defaults(initialize_tree=False)
 
 parser.add_argument('-is', '--initialize_seq', action='store_true', help='Initialize Seq with groundtruth?')
 parser.set_defaults(initialize_seq=False)
+
+parser.add_argument('-alt', '--alternate_optimization', action='store_true', help='Alternate tree and seq optimization?')
+parser.set_defaults(alternate_optimization=False)
 
 args = vars(parser.parse_args())
 
@@ -143,27 +154,43 @@ if(args['groundtruth']):
         })
 
 
-#### Define optimizer and parameters (t and the ancestor sequences)
-optimizer = optax.adam(metadata['lr'])
+#### Define parameters (t and the ancestor sequences)
 params = {
     't': jax.random.normal(key, (n_all - 1,n_ancestors))
     }
 
 
+tree_mask = {}
+tree_mask['t'] = 'learn'
+
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
     params['t'] = tree[0:-1,n_leaves:]
-
+    
 #### Add the ancestor sequences to the parameters
 for i in range(0, n_ancestors):
     params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
 
+    if(args['alternate_optimization']):
+        tree_mask[str(i)]  = 'fixed'
+    else:
+        tree_mask[str(i)]  = 'learn'
+    
 #### Initialize the optimizer
-opt_state = optimizer.init(params)
-
+# optimizer = optax.adam(metadata['lr'])
+optimizer = optax.multi_transform(
+                    {
+                     'learn': optax.adam(metadata['lr']), 
+                     'fixed': optax.set_to_zero()
+                     },
+                    tree_mask
+                    )
 
 print("parameters to optimize:", end = " -> ")
 print(params.keys())
+print(tree_mask.keys())
+
+opt_state = optimizer.init(params)
 
 fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params, base_tree), n_all),n_leaves, True)
 
@@ -174,6 +201,21 @@ compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 
 #### Training loop
 for _ in range(metadata['epochs']):
+
+    if(_ % 500 == 0 and args['alternate_optimization']):
+        #make param_2 learnable, while fixing param_1
+        tree_mask = invert_dict(tree_mask)
+        print(" mask: ", tree_mask)
+
+        optimizer = optax.multi_transform(
+                    {
+                     'learn': optax.adam(metadata['lr']), 
+                     'fixed': optax.set_to_zero()
+                     },
+                    tree_mask
+                    )
+        
+        opt_state = optimizer.init(params)
 
     if(_%100==0):
         ###~ Get the current discretized tree
@@ -221,7 +263,7 @@ for _ in range(metadata['epochs']):
         print("{:.5f}".format(loss,end = " \n"))
     
     #=> Update the parameters
-    updates, opt_state = optimizer.update(grads, opt_state)
+    updates, opt_state = optimizer.update(grads, opt_state, params)
     params = optax.apply_updates(params, updates)
 
     ### update the tree loss schedule
