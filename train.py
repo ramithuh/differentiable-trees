@@ -48,8 +48,10 @@ parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=Fal
 parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False, type = int)
 parser.add_argument('-nl','--letters'    , help='# of letters?'    , required=False, type = int)
 parser.add_argument('-s','--seed'        , help='seed'            , required=False, type = int)
-parser.add_argument('-tLs','--tree_loss_schedule' , help='tree loss schedule', required=False, type = str)
 
+parser.add_argument('-ai','--alternate_interval', help='alternate_interval', required=False, type = int)
+parser.add_argument('-tLs','--tree_loss_schedule' , help='tree loss schedule', required=False, type = str)
+parser.add_argument('-lr','--learning_rate'      , help='learning rate'    , required=False, type = float)
 
 ## what to train?
 parser.add_argument('-fs', '--fix_seqs', action='store_true', help='Fix sequences when training ?')
@@ -98,7 +100,7 @@ metadata = {
     'exp_name' : f"l={n_leaves}, m={n_mutations}, s={seq_length}, fs={args['fix_seqs']}, ft={args['fix_tree']}" ,
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
-    'lr': 0.1,
+    'lr': 0.001 if args['learning_rate']==None else args['learning_rate'],
     'epochs': 200000,
     'tLs': args['tree_loss_schedule'] # #tree loss schedule
     }
@@ -161,7 +163,11 @@ params = {
 
 
 tree_mask = {}
-tree_mask['t'] = 'learn'
+
+if(args['fix_tree']):
+    tree_mask['t'] = 'fixed'
+else:
+    tree_mask['t'] = 'learn'
 
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
@@ -171,7 +177,7 @@ if(args['initialize_tree']):
 for i in range(0, n_ancestors):
     params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
 
-    if(args['alternate_optimization']):
+    if(args['alternate_optimization'] or args['fix_seqs']):
         tree_mask[str(i)]  = 'fixed'
     else:
         tree_mask[str(i)]  = 'learn'
@@ -202,20 +208,21 @@ compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 #### Training loop
 for _ in range(metadata['epochs']):
 
-    if(_ % 1000 == 0 and _>0 and args['alternate_optimization']):
-        #if we are in ALT mode switch the mask
-        tree_mask = invert_dict(tree_mask)
-        print(" mask: ", tree_mask)
+    if(args['alternate_optimization']):
+        if(_ % args['alternate_interval'] == 0 and _>0):
+            #if we are in ALT mode switch the mask
+            tree_mask = invert_dict(tree_mask)
+            print(" mask: ", tree_mask)
 
-        optimizer = optax.multi_transform(
-                    {
-                     'learn': optax.adam(metadata['lr']), 
-                     'fixed': optax.set_to_zero()
-                     },
-                    tree_mask
-                    )
-        
-        opt_state = optimizer.init(params)
+            optimizer = optax.multi_transform(
+                        {
+                        'learn': optax.adam(metadata['lr']), 
+                        'fixed': optax.set_to_zero()
+                        },
+                        tree_mask
+                        )
+            
+            opt_state = optimizer.init(params)
 
     if(_%100==0):
         ###~ Get the current discretized tree
@@ -256,9 +263,11 @@ for _ in range(metadata['epochs']):
             "tree":wandb.Image(tree_at_epoch),
             "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
             "Seq":wandb.data_types.Plotly(new_seq),
+            "last ancestor" :  wandb.data_types.Plotly(px.imshow((seqs_[-1]), text_auto=True)),
             "tLs":metadata['tLs'][0],})
 
     if(_%100==0):
+        print("epoch ",_, end = " ")
         print(metadata['tLs'][0], end = " ")
         print("{:.5f}".format(loss,end = " \n"))
     
