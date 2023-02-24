@@ -28,6 +28,8 @@ def update_tree(params, base_tree):
 
 @jit
 def update_seq(params, seqs, temperature = 1):
+
+
     n_all = seqs.shape[0]
     n_leaves = (n_all + 1)//2
 
@@ -142,7 +144,7 @@ def DFS(curr, tree, path_prob, visited,depth, verbose=False ):
     print("-"*depth, "came to -> ", curr, " with path prob ", path_prob)
 
   ind = jnp.argpartition(tree[:-1,curr], -1)[-2:][::-1] #maxpool choice
-  sel_ind = ind[tree[:-1,curr][ind]]
+  sel_ind = ind
 
   if(verbose):
     print("-"*depth, "🏃🏻‍♂️ going to visit -> ", sel_ind, " with probs : ", tree[:,curr][sel_ind])
@@ -206,7 +208,7 @@ def compute_loss(params, seqs, base_tree, metadata, temp, verbose = False):
     if(metadata['args']['fix_seqs']):
         seqs_ = seqs
     else:
-        seqs_ = update_seq(params, seqs, metadata['seq_temp'] )
+        seqs_ = update_seq(params, seqs, temp )
     
     if(metadata['args']['fix_tree']):
         t_ = base_tree
@@ -214,13 +216,13 @@ def compute_loss(params, seqs, base_tree, metadata, temp, verbose = False):
         t_ = update_tree(params, base_tree)
     
     
-    recurse_cost = compute_cost_recursive(t_, verbose = False)
+    recurse_cost = -1 #compute_cost_recursive(t_, verbose = False)
 
     cost_surrogate = compute_cost(seqs_,t_, metadata) # surrogate traversal cost
     
     tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
     
-    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost*1000)
+    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost*0)
 
     if(verbose):
         cost           = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
