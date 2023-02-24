@@ -142,7 +142,7 @@ def DFS(curr, tree, path_prob, visited,depth, verbose=False ):
     print("-"*depth, "came to -> ", curr, " with path prob ", path_prob)
 
   ind = jnp.argpartition(tree[:-1,curr], -1)[-2:][::-1] #maxpool choice
-  sel_ind = ind[tree[:-1,curr][ind] > 0.8]
+  sel_ind = ind[tree[:-1,curr][ind]]
 
   if(verbose):
     print("-"*depth, "🏃🏻‍♂️ going to visit -> ", sel_ind, " with probs : ", tree[:,curr][sel_ind])

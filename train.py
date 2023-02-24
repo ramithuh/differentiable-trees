@@ -203,7 +203,7 @@ compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 for _ in range(metadata['epochs']):
 
     if(_ % 1000 == 0 and _>0 and args['alternate_optimization']):
-        #make param_2 learnable, while fixing param_1
+        #if we are in ALT mode switch the mask
         tree_mask = invert_dict(tree_mask)
         print(" mask: ", tree_mask)
 
