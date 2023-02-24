@@ -214,13 +214,13 @@ def compute_loss(params, seqs, base_tree, metadata, temp, verbose = False):
         t_ = update_tree(params, base_tree)
     
     
-    recurse_cost = -1 #compute_cost_recursive(t_, verbose = False)
+    recurse_cost = compute_cost_recursive(t_, verbose = False)
 
     cost_surrogate = compute_cost(seqs_,t_, metadata) # surrogate traversal cost
     
     tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
     
-    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss)
+    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost*1000)
 
     if(verbose):
         cost           = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost

@@ -99,7 +99,7 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': 0.1,
-    'epochs': 10000,
+    'epochs': 200000,
     'tLs': args['tree_loss_schedule'] # #tree loss schedule
     }
 print(metadata)
@@ -165,7 +165,7 @@ tree_mask['t'] = 'learn'
 
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
-    params['t'] = tree[0:-1,n_leaves:]
+    params['t'] = tree[0:-1,n_leaves:]*10
     
 #### Add the ancestor sequences to the parameters
 for i in range(0, n_ancestors):
@@ -202,7 +202,7 @@ compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 #### Training loop
 for _ in range(metadata['epochs']):
 
-    if(_ % 500 == 0 and args['alternate_optimization']):
+    if(_ % 1000 == 0 and _>0 and args['alternate_optimization']):
         #make param_2 learnable, while fixing param_1
         tree_mask = invert_dict(tree_mask)
         print(" mask: ", tree_mask)
