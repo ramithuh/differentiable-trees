@@ -15,6 +15,10 @@ import functools
 
 import pydot
 import numpy as np
+
+from typing import Dict
+from jaxtyping import Array, Float
+
 from modules.vis_utils import *
 from modules.tree_func import *
 from modules.gt_tree_gen import *
@@ -106,6 +110,7 @@ metadata = {
     }
 print(metadata)
 
+wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
 wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"], notes = args['notes'])
 
 ## JAX Doesn't like some data types when jitting
@@ -157,7 +162,7 @@ if(args['groundtruth']):
 
 
 #### Define parameters (t and the ancestor sequences)
-params = {
+params : Dict[str, Array] = {
     't': jax.random.normal(key, (n_all - 1,n_ancestors))
     }
 

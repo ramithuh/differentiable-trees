@@ -5,6 +5,10 @@ from jax import random
 from jax import jit
 from functools import partial
 
+from typing import Dict, List
+from jaxtyping import Array, Float
+
+
 target_depth = 0
 num_mutations = 0
 sequences = []
@@ -60,7 +64,22 @@ def create_seq(key, seq, depth):
   create_seq(k2, seq_2, depth+1)
 
 
-def generate_groundtruth(metadata, seed = 42, verbose = False):
+def generate_groundtruth(metadata : Dict[str, int], seed = 42, verbose = False) -> List[Array]: 
+    '''
+        Generates a groundtruth example based on the metadata provided
+
+
+        Args : 
+            metadata: dictionary containing the required specifications
+            seed: random seed
+            verbose: print the number of leaves generated
+
+        Returns:
+            masked_main : masked sequences (shape = (n_all, seq_length))
+            true_main   : true sequences   (shape = (n_all, seq_length))
+            tree        : tree structure   (shape = (n_all, n_all))
+    '''
+
     key = random.PRNGKey(seed)
 
     global target_depth
