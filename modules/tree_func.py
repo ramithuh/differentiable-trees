@@ -6,10 +6,20 @@ import matplotlib.pyplot as plt
 
 from jax import jit
 from functools import partial
-
+from jaxtyping import Array, Float, PyTrees
 
 @partial(jit, static_argnums=1)
-def discretize_tree_topology(tree, n_nodes):
+def discretize_tree_topology(tree : Float[Array, "nodes nodes"], n_nodes : int): -> Float[Array, "nodes nodes"]:
+    '''
+        Returns the one-hot encoding of the given soft tree topology
+
+        Args:
+            tree : soft tree topology (softmax applied over the rows)
+            n_nodes : number of total nodes in the tree
+        Returns:
+            t_q : one-hot encoding of the tree topology 
+    '''
+
     t_argmax = jnp.argmax(tree,axis = 1)
     t_q = nn.one_hot(t_argmax, n_nodes)
     
@@ -17,12 +27,27 @@ def discretize_tree_topology(tree, n_nodes):
 
 @jit
 def update_tree(params, base_tree):
+    '''
+        Uses base_tree and returns the updated soft tree topology
+        Particularly updates the ancestor probabilities in the trees
+
+        Args:
+            params : params['t'] denotes the trainable params; (ancestors)
+                     params['t'] -> (n_nodes, n_ancestors)
+
+            base_tree : base tree topology
+                        base_tree -> (n_nodes, n_nodes)
+        Returns:
+            t : updated soft tree topology
+                t -> (n_nodes, n_nodes)
+    '''
+
     n_leaves = (base_tree.shape[1] - params['t'].shape[1])
     
     t_softmax = nn.softmax(params['t'],axis=1)
 
     t = base_tree.at[0:-1,n_leaves:].set(t_softmax)
-    t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself) 
+    t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself. i.e. root) 
     
     return t
 
