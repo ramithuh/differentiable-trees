@@ -6,28 +6,62 @@ import matplotlib.pyplot as plt
 
 from jax import jit
 from functools import partial
-
+from typing import Dict, List
+from jaxtyping import Array, Float
 
 @partial(jit, static_argnums=1)
-def discretize_tree_topology(tree, n_nodes):
+def discretize_tree_topology(tree : Float[Array, "nodes nodes"], n_nodes : int) -> Float[Array, "nodes nodes"]:
+    '''
+        Returns the one-hot encoding of the given soft tree topology
+
+        Args:
+            tree : soft tree topology (softmax applied over the rows)
+            n_nodes : number of total nodes in the tree
+        Returns:
+            t_q : one-hot encoding of the tree topology 
+    '''
+
     t_argmax = jnp.argmax(tree,axis = 1)
     t_q = nn.one_hot(t_argmax, n_nodes)
     
     return t_q
 
 @jit
-def update_tree(params, base_tree):
+def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes"]) -> Float[Array, "nodes nodes"]:
+    '''
+        Uses base_tree and returns the updated soft tree topology
+        Particularly updates the ancestor probabilities in the trees
+
+        Args:
+            params : params['t'] denotes the trainable params; (ancestors)
+                     params['t'] -> (n_nodes, n_ancestors)
+
+            base_tree : base tree topology
+                        base_tree -> (n_nodes, n_nodes)
+        Returns:
+            t : updated soft tree topology
+                t -> (n_nodes, n_nodes)
+    '''
+
     n_leaves = (base_tree.shape[1] - params['t'].shape[1])
     
     t_softmax = nn.softmax(params['t'],axis=1)
 
     t = base_tree.at[0:-1,n_leaves:].set(t_softmax)
-    t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself) 
+    t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself. i.e. root) 
     
     return t
 
 @jit
-def update_seq(params, seqs, temperature = 1):
+def update_seq(params : Dict[str, Array], seqs : Float[Array, "nodes letters"], temperature : Float = 1 ) -> Float[Array, "nodes letters"]:
+    '''
+        Updates the ancestor sequences using the trainable params
+
+        Args:
+            params : params['n'] denotes the nth ancestor sequence
+    '''
+
+
     n_all = seqs.shape[0]
     n_leaves = (n_all + 1)//2
 
@@ -55,7 +89,7 @@ def update_seq(params, seqs, temperature = 1):
     return seqs
 
 @jit
-def enforce_graph(t_, s, metadata = None, verbose = False):
+def enforce_graph(t_ : Float[Array, "nodes nodes"], s : Float, metadata = None, verbose = False) -> List[Float]:
     ''' 
 
         Enforces constraints such that,
@@ -63,11 +97,11 @@ def enforce_graph(t_, s, metadata = None, verbose = False):
             2) there are no self loops
         
         Args:
-            t_: tree topology
-            s: scaling factor
+            t_: tree topology (after softmax)
+            s : scaling factor
             verbose: print the loss values
         Returns:
-            loss: loss value
+            loss: loss value as list [tree_forcing_loss, loop_loss, bidirectional_loss]
     '''
 
     #n_all = metadata['n_all']
@@ -92,17 +126,27 @@ def enforce_graph(t_, s, metadata = None, verbose = False):
     return tree_force_loss, loop_loss, bidirection_loss
 
 
-def compute_cost(sequences, tree, metadata, verbose = False, surrogate_loss = True):
+def compute_cost(sequences : Float[Array, "nodes seq_length letters"], tree : Float[Array, "nodes nodes"], metadata, verbose = False, surrogate_loss = True) -> Float:
+    '''
+        compute the traversal cost (character level changes while traversing the tree)
+
+        Args:
+            sequences : one-hot encoded sequences
+                        shape = (n_all, seq_length, letters)
+            tree      : tree topology
+                        shape = (n_all, n_all)
+            
+        Returns: 
+            ans : traversal cost
+    '''
+
     if(verbose==True):
         show_graph_with_labels(discretize_tree_topology(tree, n_all),n_leaves)
         
-    seq_onehot = jnp.transpose(sequences, (2,0,1)) #bring onehot encoding to the front
+    seq_onehot = jnp.transpose(sequences, (2,0,1)) # bring onehot encoding to the front (onehot, n_all, seq_length)
     sel        = jnp.expand_dims(tree, axis = 0)   # make it (1, n_all, n_all)
 
-    selection = jnp.matmul(sel, seq_onehot)
-
-    selection_ = jnp.matmul(tree, jnp.argmax(sequences, axis = 2))
-    sequences_ = jnp.argmax(sequences, axis = 2)
+    selection  = jnp.matmul(sel, seq_onehot)
     
     # print(selection)
     
@@ -112,37 +156,48 @@ def compute_cost(sequences, tree, metadata, verbose = False, surrogate_loss = Tr
     
     #method 2:
     if(surrogate_loss):
+        '''
+            This is an approximation of the traversal cost, because seq_onehot is soft 
+        '''
         out = jnp.transpose(selection, (1,2,0))
         ans = (jnp.sum(abs((out - sequences)), axis = [1,2])/(2)).sum()
 
         #ans = ((nn.sigmoid((abs(selection - sequences))) - 0.5)*2).sum() ## works currently as sm is the basic config. need to think about extending
     else:
-        sm = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters'])
+        '''
+            This is the exact traversal cost, but it is not differentiable.
+            similarity matrix is assumed to be a 1s matrix with 0s on the diagonal
+        '''
+        selection_ = jnp.matmul(tree, jnp.argmax(sequences, axis = 2))
+        sequences_ = jnp.argmax(sequences, axis = 2)
+    
+        sm  = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters'])
+        
         ans = sm[jnp.round(selection_).astype(jnp.int32),jnp.round(sequences_).astype(jnp.int32)].sum()
 
     return ans
 
-def DFS(curr, tree, path_prob, visited,depth, verbose=False ):
+def DFS(curr : int, tree : Float[Array,"nodes nodes"], path_prob : float, visited : List[Float], depth : int, verbose=False ) -> List[Float]:
   '''
     Runs DFS on the tree and returns the visited nodes and the conflicts
     Args:
-        curr: current node
-        tree: tree topology matrix (adjacency matrix)
-        visited: list of visited nodes
-        conflicts: number of conflicts
-        verbose: print the visited nodes
+        curr    : current node
+        tree    : tree topology matrix (adjacency matrix)
+                  shape(n_all, n_all)
+        path_prob : probability of the path till now
+        visited   : list of visited nodes
+        depth     : depth of the tree at the current node
+        
+        verbose : print the visited nodes
     Returns:
-        visited: list of visited nodes
-        conflicts: number of conflicts
+        visited : list of visited nodes
   '''
-
-  
 
   if(verbose):
     print("-"*depth, "came to -> ", curr, " with path prob ", path_prob)
 
   ind = jnp.argpartition(tree[:-1,curr], -1)[-2:][::-1] #maxpool choice
-  sel_ind = ind[tree[:-1,curr][ind] > 0.8]
+  sel_ind = ind
 
   if(verbose):
     print("-"*depth, "🏃🏻‍♂️ going to visit -> ", sel_ind, " with probs : ", tree[:,curr][sel_ind])
@@ -165,48 +220,60 @@ def DFS(curr, tree, path_prob, visited,depth, verbose=False ):
   return visited
 
 
-def compute_cost_recursive(tree, verbose=False):
-  '''
-    Computes the two costs of the tree
-        loops (measured by conflicts)
-        unvisited nodes
+def compute_cost_recursive(tree : Float[Array, "nodes nodes"], verbose=False) -> Float:
+    """Computes the two combined costs of the tree
+        1. loops (measured by conflicts)
+        2. unvisited nodes
 
     Args:
-        tree: tree adjacency matrix
-        verbose: print the visited nodes
+        tree (shape = (n_all, n_all)): tree adjacency matrix
+        verbose (bool, optional): print the visited nodes. Defaults to False.
 
     Returns:
-        loops + unvisited nodes
-  '''
+        Float: loops + unvisited nodes
+    """  
 
-  visited = [0] * tree.shape[0]
-  visited[-1] = 1
+    visited = [0] * tree.shape[0]
+    visited[-1] = 1
 
-  visited = DFS(tree.shape[0] - 1, tree, 1, visited, 0, verbose = verbose)
+    visited = DFS(tree.shape[0] - 1, tree, 1, visited, 0, verbose = verbose)
 
-  if(verbose):
-    print("\n\n#######")
-    print(" Visited nodes : ", jnp.asarray(visited))
-    #print(" Conflicts : ", jnp.asarray(conflicts))
-    print("#######\n\n")
+    if(verbose):
+        print("\n\n#######")
+        print(" Visited nodes : ", jnp.asarray(visited))
+        #print(" Conflicts : ", jnp.asarray(conflicts))
+        print("#######\n\n")
 
-    #print(params['t'].shape[0] - sum(visited),conflicts)
+        #print(params['t'].shape[0] - sum(visited),conflicts)
 
-    print("\nDistance from prototype -> ", jnp.array(visited) - 1, " --> total ", abs(jnp.array(visited) - 1).sum() )
-    # print("Total Conflicts --> ", jnp.array(conflicts).sum() )
-  
-  #print(params['t'].shape[0] - sum(visited)/, conflicts)
-  return abs(jnp.array(visited) - 1).sum() #params['t'].shape[0] - sum(visited) +  conflicts
+        print("\nDistance from prototype -> ", jnp.array(visited) - 1, " --> total ", abs(jnp.array(visited) - 1).sum() )
+        # print("Total Conflicts --> ", jnp.array(conflicts).sum() )
+    
+    #print(params['t'].shape[0] - sum(visited)/, conflicts)
+    return abs(jnp.array(visited) - 1).sum() #params['t'].shape[0] - sum(visited) +  conflicts
 
 
-def compute_loss(params, seqs, base_tree, metadata, temp, verbose = False):
+def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
+    """Computes the total loss for a given set of sequences and a tree
+
+    Args:
+        params : contains the tree and seq trainable parameters
+        seqs   : sequences array. shape = (n_all, length, n_letters
+        base_tree : base tree with zeros
+        metadata (Dict) : contains the metadata
+        temp (Float) : temperature for the loss
+        verbose : returns individual loss item if True. Defaults to False.
+
+    Returns:
+        cost : total loss
+    """    
     n_leaves = metadata['n_leaves']
     n_all    = metadata['n_all']
 
     if(metadata['args']['fix_seqs']):
         seqs_ = seqs
     else:
-        seqs_ = update_seq(params, seqs, metadata['seq_temp'] )
+        seqs_ = update_seq(params, seqs, temp )
     
     if(metadata['args']['fix_tree']):
         t_ = base_tree
@@ -214,13 +281,13 @@ def compute_loss(params, seqs, base_tree, metadata, temp, verbose = False):
         t_ = update_tree(params, base_tree)
     
     
-    recurse_cost = -1 #compute_cost_recursive(t_, verbose = False)
+    recurse_cost = compute_cost_recursive(t_, verbose = False)
 
     cost_surrogate = compute_cost(seqs_,t_, metadata) # surrogate traversal cost
     
     tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
     
-    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss)
+    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost*500)
 
     if(verbose):
         cost           = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost

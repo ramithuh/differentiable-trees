@@ -15,6 +15,10 @@ import functools
 
 import pydot
 import numpy as np
+
+from typing import Dict
+from jaxtyping import Array, Float
+
 from modules.vis_utils import *
 from modules.tree_func import *
 from modules.gt_tree_gen import *
@@ -24,7 +28,15 @@ import plotly.express as px
 rc('animation', html='jshtml')
 
 
+def invert_dict(dictionary):
+  new_dict = dictionary
+  for key in dictionary.keys():
+    if(new_dict[key] == 'fixed'):
+      new_dict[key] = 'learn'
+    else:
+      new_dict[key] = 'fixed'
 
+  return new_dict
 
 #### Parse arguments
 parser = argparse.ArgumentParser(description='Train a differentiable tree model. \n sample usage :  python train.py -l 8 -m 10 -sl 50 -fs')
@@ -40,8 +52,10 @@ parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=Fal
 parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False, type = int)
 parser.add_argument('-nl','--letters'    , help='# of letters?'    , required=False, type = int)
 parser.add_argument('-s','--seed'        , help='seed'            , required=False, type = int)
-parser.add_argument('-tLs','--tree_loss_schedule' , help='tree loss schedule', required=False, type = str)
 
+parser.add_argument('-ai','--alternate_interval', help='alternate_interval', required=False, type = int)
+parser.add_argument('-tLs','--tree_loss_schedule' , help='tree loss schedule', required=False, type = str)
+parser.add_argument('-lr','--learning_rate'      , help='learning rate'    , required=False, type = float)
 
 ## what to train?
 parser.add_argument('-fs', '--fix_seqs', action='store_true', help='Fix sequences when training ?')
@@ -55,6 +69,9 @@ parser.set_defaults(initialize_tree=False)
 
 parser.add_argument('-is', '--initialize_seq', action='store_true', help='Initialize Seq with groundtruth?')
 parser.set_defaults(initialize_seq=False)
+
+parser.add_argument('-alt', '--alternate_optimization', action='store_true', help='Alternate tree and seq optimization?')
+parser.set_defaults(alternate_optimization=False)
 
 args = vars(parser.parse_args())
 
@@ -87,12 +104,13 @@ metadata = {
     'exp_name' : f"l={n_leaves}, m={n_mutations}, s={seq_length}, fs={args['fix_seqs']}, ft={args['fix_tree']}" ,
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
-    'lr': 0.1,
-    'epochs': 10000,
+    'lr': 0.001 if args['learning_rate']==None else args['learning_rate'],
+    'epochs': 200000,
     'tLs': args['tree_loss_schedule'] # #tree loss schedule
     }
 print(metadata)
 
+wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
 wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"], notes = args['notes'])
 
 ## JAX Doesn't like some data types when jitting
@@ -143,27 +161,47 @@ if(args['groundtruth']):
         })
 
 
-#### Define optimizer and parameters (t and the ancestor sequences)
-optimizer = optax.adam(metadata['lr'])
-params = {
+#### Define parameters (t and the ancestor sequences)
+params : Dict[str, Array] = {
     't': jax.random.normal(key, (n_all - 1,n_ancestors))
     }
 
 
+tree_mask = {}
+
+if(args['fix_tree']):
+    tree_mask['t'] = 'fixed'
+else:
+    tree_mask['t'] = 'learn'
+
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
-    params['t'] = tree[0:-1,n_leaves:]
-
+    params['t'] = tree[0:-1,n_leaves:]*10
+    
 #### Add the ancestor sequences to the parameters
 for i in range(0, n_ancestors):
     params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
 
+    if(args['alternate_optimization'] or args['fix_seqs']):
+        tree_mask[str(i)]  = 'fixed'
+    else:
+        tree_mask[str(i)]  = 'learn'
+    
 #### Initialize the optimizer
-opt_state = optimizer.init(params)
-
+# optimizer = optax.adam(metadata['lr'])
+optimizer = optax.multi_transform(
+                    {
+                     'learn': optax.adam(metadata['lr']), 
+                     'fixed': optax.set_to_zero()
+                     },
+                    tree_mask
+                    )
 
 print("parameters to optimize:", end = " -> ")
 print(params.keys())
+print(tree_mask.keys())
+
+opt_state = optimizer.init(params)
 
 fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params, base_tree), n_all),n_leaves, True)
 
@@ -174,6 +212,22 @@ compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 
 #### Training loop
 for _ in range(metadata['epochs']):
+
+    if(args['alternate_optimization']):
+        if(_ % args['alternate_interval'] == 0 and _>0):
+            #if we are in ALT mode switch the mask
+            tree_mask = invert_dict(tree_mask)
+            print(" mask: ", tree_mask)
+
+            optimizer = optax.multi_transform(
+                        {
+                        'learn': optax.adam(metadata['lr']), 
+                        'fixed': optax.set_to_zero()
+                        },
+                        tree_mask
+                        )
+            
+            opt_state = optimizer.init(params)
 
     if(_%100==0):
         ###~ Get the current discretized tree
@@ -214,14 +268,16 @@ for _ in range(metadata['epochs']):
             "tree":wandb.Image(tree_at_epoch),
             "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
             "Seq":wandb.data_types.Plotly(new_seq),
+            "last ancestor" :  wandb.data_types.Plotly(px.imshow((seqs_[-1]), text_auto=True)),
             "tLs":metadata['tLs'][0],})
 
     if(_%100==0):
+        print("epoch ",_, end = " ")
         print(metadata['tLs'][0], end = " ")
         print("{:.5f}".format(loss,end = " \n"))
     
     #=> Update the parameters
-    updates, opt_state = optimizer.update(grads, opt_state)
+    updates, opt_state = optimizer.update(grads, opt_state, params)
     params = optax.apply_updates(params, updates)
 
     ### update the tree loss schedule
