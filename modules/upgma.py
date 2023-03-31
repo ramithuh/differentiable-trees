@@ -11,10 +11,11 @@ from jaxtyping import Array, Float
 from ott.tools import soft_sort
 softranks = jax.jit(soft_sort.ranks)
 
-def print_matrix(matrix, mask_value, masked_char='-', padding=4):
+def print_matrix(mat, mask_value, masked_char='-', padding=4):
     '''
         Nicely print matrix -_-
     '''
+    matrix = mat.astype(jnp.float32)
     
     for row in matrix:
         for value in row:
@@ -24,7 +25,7 @@ def print_matrix(matrix, mask_value, masked_char='-', padding=4):
                 print(f"{value:>{padding}.0f}", end=' ')
         print()
 
-def get_prototypes(indices : Tuple[np.ndarray, np.ndarray], n_nodes : int) -> Float[Array, "options nodes"]:
+def get_prototypes(indices : Tuple[Array, Array], n_nodes : int) -> Float[Array, "options nodes"]:
     '''
         Given indices of the upper triangular matrix, 
         return the corresponding onehot encoded protypes
@@ -40,12 +41,12 @@ def get_prototypes(indices : Tuple[np.ndarray, np.ndarray], n_nodes : int) -> Fl
     '''
     dim = indices[0].shape[0]
 
-    prototypes = np.zeros((dim, n_nodes))
+    prototypes = jnp.zeros((dim, n_nodes)).astype(jnp.bfloat16)
 
     for i in range(0,dim):
         #consider ith pair of indices  
-        prototypes[i][indices[0][i]] = 1 #indicate indices[0][i] is selected
-        prototypes[i][indices[1][i]] = 1 #indicate indices[1][i] is selected
+        prototypes = prototypes.at[i,indices[0][i]].set(1) #indicate indices[0][i] is selected
+        prototypes = prototypes.at[i,indices[1][i]].set(1) #indicate indices[1][i] is selected
 
     return prototypes
 
@@ -64,10 +65,10 @@ def expand_matrix(mat : Float[Array, "nodes nodes"], sel : Float[Array, "options
     dim = mat.shape[0]
     e   = get_expansion_matrix(dim, sel)
 
-    sol = np.zeros((dim+1,dim+1)) #expanded matrix with the added ancestor node
+    sol = jnp.zeros((dim+1,dim+1)) #expanded matrix with the added ancestor node
     
-    sol[:,:-1] = sol[:,:-1] + (e.T @ mat)
-    sol[:-1,:] = sol[:-1,:] + (mat @ e)
+    sol = sol.at[:,:-1].set(sol[:,:-1] + (e.T @ mat))
+    sol = sol.at[:-1,:].set(sol[:-1,:] + (mat @ e))
 
     return sol/2
 
@@ -100,18 +101,17 @@ def mask_matrix(mat : Float[Array, "nodes nodes"], idx : Float[Array, "options"]
     '''    
     dim = mat.shape[0]
 
-    mat[:,idx[0]] = inf
-    mat[:,idx[1]] = inf
+    mat = mat.at[:,idx[0]].set(inf)
+    mat = mat.at[:,idx[1]].set(inf)
 
-    mat[idx[0],:] = inf
-    mat[idx[1],:] = inf
+    mat = mat.at[idx[0],:].set(inf)
+    mat = mat.at[idx[1],:].set(inf)
 
     sol = mat
 
     return sol
 
-
-def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], verbose : bool) -> Float[Array, "all_nodes all_nodes"]:
+def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], verbose : bool = False) -> Float[Array, "all_nodes all_nodes"]:
     '''
         Given a distance matrix, return the UPGMA tree
         Code was inspired by : http://ls50.solab.org/week_5, after looking at how UPGMA is implemented
@@ -124,8 +124,8 @@ def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], verbo
     L = dm.shape[0] 
     all_nodes = L*2 - 1
 
-    tree    = jnp.zeros((all_nodes,all_nodes)) ## emptry tree (adjacency matrix)
-    vector  = jnp.zeros((all_nodes,))          ## sample ancestor description vector
+    tree    = jnp.zeros((all_nodes,all_nodes)).astype(jnp.bfloat16) ## emptry tree (adjacency matrix)
+    vector  = jnp.zeros((all_nodes,)).astype(jnp.bfloat16)          ## sample ancestor description vector
 
     current = dm
     
@@ -137,12 +137,12 @@ def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], verbo
 
         if(indices[0].shape[0] > 1): ##TODO : handle only one node case where softrank fails
             
-            soft      = nn.softmax(softranks(-current[indices], epsilon=0.00010)*5).reshape(indices[0].shape[0],1)
+            soft      = nn.softmax(softranks(-current[indices], epsilon=0.010*5)).reshape(indices[0].shape[0],1)
             prototype = get_prototypes(indices, current.shape[0])
             
             sel = jnp.sum(soft*prototype,axis = 0)
         else:
-            sel = jnp.array([1,1])
+            sel = jnp.array([1,1]).astype(jnp.bfloat16)
 
         pseudo_idx = jnp.argpartition(sel, -1)[-2::][::-1] #getting the most probable two nodes to merge
         
@@ -157,7 +157,6 @@ def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], verbo
         tree    = tree.at[:, n + L].set(new_sel)
 
     return tree
-
 
 def get_NJ(X, upgma=False, nw=True, nw_labels=None, nw_parent=False):
   '''

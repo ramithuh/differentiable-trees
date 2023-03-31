@@ -9,6 +9,8 @@ from functools import partial
 from typing import Dict, List
 from jaxtyping import Array, Float
 
+from modules.upgma import differentiable_upgma
+
 @partial(jit, static_argnums=1)
 def discretize_tree_topology(tree : Float[Array, "nodes nodes"], n_nodes : int) -> Float[Array, "nodes nodes"]:
     '''
@@ -277,11 +279,11 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
     
     if(metadata['args']['fix_tree']):
         t_ = base_tree
-    else:
-        t_ = update_tree(params, base_tree)
+    else:   
+        t_ = differentiable_upgma(params['t'])#update_tree(params, base_tree)
     
     
-    recurse_cost = compute_cost_recursive(t_, verbose = False)
+    recurse_cost = 0 #compute_cost_recursive(t_, verbose = False)
 
     cost_surrogate = compute_cost(seqs_,t_, metadata) # surrogate traversal cost
     
