@@ -1,7 +1,8 @@
 import jax
+import numpy as np
 import jax.nn as nn
 import jax.numpy as jnp
-import numpy as np
+
 
 import sys
 import functools
@@ -111,7 +112,7 @@ def mask_matrix(mat : Float[Array, "nodes nodes"], idx : Float[Array, "options"]
 
     return sol
 
-def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], e : List[Float] = [0.01, 5], verbose : bool = False) -> Float[Array, "all_nodes all_nodes"]:
+def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], e : List[Float] = [0.1, 1, 10], verbose : bool = False) -> Float[Array, "all_nodes all_nodes"]:
     '''
         Given a distance matrix, return the UPGMA tree
         Code was inspired by : http://ls50.solab.org/week_5, after looking at how UPGMA is implemented
@@ -125,8 +126,9 @@ def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], e : L
     L = dm.shape[0] 
     all_nodes = L*2 - 1
 
-    tree    = jnp.zeros((all_nodes,all_nodes)).astype(jnp.bfloat16) ## emptry tree (adjacency matrix)
-    vector  = jnp.zeros((all_nodes,)).astype(jnp.bfloat16)          ## sample ancestor description vector
+    tree   = jnp.zeros((all_nodes,all_nodes)).astype(jnp.bfloat16) ## emptry tree (adjacency matrix)
+    t      = jnp.zeros((all_nodes,all_nodes)).astype(jnp.bfloat16)
+    vector = jnp.zeros((all_nodes,)).astype(jnp.bfloat16)          ## sample ancestor description vector
 
     current = dm
     
@@ -150,14 +152,20 @@ def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], e : L
         current = expand_matrix(current, sel)
         current = mask_matrix(current,pseudo_idx)
         
+        new_sel = vector.at[:sel.shape[0]].set(sel)
+        tree    = tree.at[:, n + L].set(new_sel)
+        
         if(verbose):
             print("interation -> ", n)
             print_matrix(current, 1e3)
+            print("stacking column vector -> ", new_sel)
 
-        new_sel = vector.at[:sel.shape[0]].set(sel)
-        tree    = tree.at[:, n + L].set(new_sel)
 
-    return tree
+    t_softmax = nn.softmax(tree[:-1,:]*e[2],axis=1)
+    t = t.at[:-1,:].set(t_softmax)
+    t = t.at[-1,-1].set(1) 
+
+    return t
 
 def get_NJ(X, upgma=False, nw=True, nw_labels=None, nw_parent=False):
   '''
