@@ -111,13 +111,14 @@ def mask_matrix(mat : Float[Array, "nodes nodes"], idx : Float[Array, "options"]
 
     return sol
 
-def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], verbose : bool = False) -> Float[Array, "all_nodes all_nodes"]:
+def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], e : List[Float] = [0.01, 5], verbose : bool = False) -> Float[Array, "all_nodes all_nodes"]:
     '''
         Given a distance matrix, return the UPGMA tree
         Code was inspired by : http://ls50.solab.org/week_5, after looking at how UPGMA is implemented
         
         Args:
             dm : Distance matrix
+            e : temperature parameters for 1) softrank and 2) softmax
         Returns:
             tree : tree (adjacency matrix)
     '''
@@ -137,7 +138,7 @@ def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], verbo
 
         if(indices[0].shape[0] > 1): ##TODO : handle only one node case where softrank fails
             
-            soft      = nn.softmax(softranks(-current[indices], epsilon=0.010*5)).reshape(indices[0].shape[0],1)
+            soft      = nn.softmax(softranks(-current[indices], epsilon=e[0])*e[1]).reshape(indices[0].shape[0],1)
             prototype = get_prototypes(indices, current.shape[0])
             
             sel = jnp.sum(soft*prototype,axis = 0)
