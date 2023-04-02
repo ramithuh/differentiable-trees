@@ -1,6 +1,7 @@
 import jax
 import numpy as np
 import jax.nn as nn
+from jax import jit
 import jax.numpy as jnp
 
 
@@ -51,6 +52,7 @@ def get_prototypes(indices : Tuple[Array, Array], n_nodes : int) -> Float[Array,
 
     return prototypes
 
+@jit
 def expand_matrix(mat : Float[Array, "nodes nodes"], sel : Float[Array, "options nodes"]) -> Float[Array, "nodes+1 nodes+1"]:
     '''
         Given a distance matrix, expand it based on the selected nodes to merge
@@ -89,6 +91,7 @@ def get_expansion_matrix(source_dim : int, sel : Float[Array, "options nodes"]) 
 
     return jnp.column_stack((e,sel))
 
+@jit
 def mask_matrix(mat : Float[Array, "nodes nodes"], idx : Float[Array, "options"], inf = 1e3) -> Float[Array, "nodes nodes"]:
     '''
         Given a distance matrix, mask the rows and columns specified by the indices provided (idx)
@@ -112,7 +115,8 @@ def mask_matrix(mat : Float[Array, "nodes nodes"], idx : Float[Array, "options"]
 
     return sol
 
-def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], e : List[Float] = [0.1, 1, 10], verbose : bool = False) -> Float[Array, "all_nodes all_nodes"]:
+@jit
+def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], e : List[Float] = [0.01, 2, 5], verbose : bool = False) -> Float[Array, "all_nodes all_nodes"]:
     '''
         Given a distance matrix, return the UPGMA tree
         Code was inspired by : http://ls50.solab.org/week_5, after looking at how UPGMA is implemented
