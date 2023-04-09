@@ -170,7 +170,7 @@ def compute_cost(sequences : Float[Array, "nodes seq_length letters"], tree : Fl
             This is the exact traversal cost, but it is not differentiable.
             similarity matrix is assumed to be a 1s matrix with 0s on the diagonal
         '''
-        selection_ = jnp.matmul(tree, jnp.argmax(sequences, axis = 2))
+        selection_ = jnp.matmul(discretize_tree_topology(tree, tree.shape[0]), jnp.argmax(sequences, axis = 2))
         sequences_ = jnp.argmax(sequences, axis = 2)
     
         sm  = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters'])
