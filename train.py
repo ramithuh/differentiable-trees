@@ -27,6 +27,7 @@ from matplotlib import rc
 import plotly.express as px
 rc('animation', html='jshtml')
 
+from arg_parser import *
 
 def invert_dict(dictionary):
   new_dict = dictionary
@@ -61,6 +62,9 @@ parser.add_argument('-lr','--learning_rate'      , help='learning rate'    , req
 parser.add_argument('-fs', '--fix_seqs', action='store_true', help='Fix sequences when training ?')
 parser.set_defaults(fix_seqs=False)
 
+parser.add_argument('-shs', '--shuffle_seqs', action='store_true', help='Shuffle groundtruth sequences?')
+parser.set_defaults(shuffle_seqs=False)
+
 parser.add_argument('-ft', '--fix_tree', action='store_true', help='Fix tree when training ?')
 parser.set_defaults(fix_tree=False)
 
@@ -89,7 +93,7 @@ n_leaves    = int(args['leaves']) if args['leaves']!=None else 4
 n_ancestors = n_leaves - 1
 n_all       = n_leaves + n_ancestors
 n_mutations = int(args['mutations']) if args['mutations']!=None else 3
-n_letters   = int(args['letters']) if args['letters']!=None else 21
+n_letters   = int(args['letters']) if args['letters']!=None else 20
 
 args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.02,1,50]
  
@@ -108,10 +112,11 @@ metadata = {
     'epochs': 200000,
     'tLs': args['tree_loss_schedule'] # #tree loss schedule
     }
-print(metadata)
 
 wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
-wandb.init(project="Differentiable-Trees", name = metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"], notes = args['notes'])
+wandb.init(project="Results-summary", name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"], notes = args['notes'])
+
+print(pretty_print_dict(metadata))
 
 ## JAX Doesn't like some data types when jitting
 metadata['exp_name'] = None
@@ -139,6 +144,13 @@ if(args['groundtruth']):
     #if we don't want tree to change, set base_tree to tree
     if(args['fix_tree']):
         base_tree = tree
+        
+    if(args['shuffle_seqs']):        
+        shuffled_leaves = jax.random.permutation(key, seqs[0:n_leaves], independent=False) 
+        seqs = seqs.at[0:n_leaves].set(shuffled_leaves)
+        
+        shuffled_ancestors = jax.random.permutation(key, seqs[n_leaves:-1], independent=False) 
+        seqs = seqs.at[n_leaves:-1].set(shuffled_ancestors)
 
     gt_tree = show_graph_with_labels(tree, n_leaves, True)
     gt_seqs_plot = px.imshow(jnp.argmax(gt_seqs, axis = 2), text_auto=True)
