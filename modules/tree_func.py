@@ -4,6 +4,10 @@ import jax.numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
 
+import numpy as np
+import jax.scipy.linalg as slin
+import jax.numpy.linalg as la
+
 from jax import jit
 from functools import partial
 from typing import Dict, List
@@ -116,9 +120,9 @@ def enforce_graph(t_ : Float[Array, "nodes nodes"], s : Float, metadata = None, 
 
     tree_force_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(t_[:-1, n_all - n_ancestors: n_all], axis = 0) - 2),2))
     
-    loop_loss = jnp.multiply(jnp.identity(n_all-1), t_[:-1,:-1]).sum()*100  ## penalize self connections
+    loop_loss = 0#jnp.multiply(jnp.identity(n_all-1), t_[:-1,:-1]).sum()*100  ## penalize self connections
     
-    bidirection_loss = jnp.sum(jnp.matmul(t_,t_)*jnp.identity(t_.shape[0]))*100 ## penalize bidirectional connections
+    bidirection_loss = 0#jnp.sum(jnp.matmul(t_,t_)*jnp.identity(t_.shape[0]))*100 ## penalize bidirectional connections
     
     if(verbose):
         print("bifurcating tree_forcing_loss = ", tree_force_loss)
@@ -141,6 +145,8 @@ def compute_cost(sequences : Float[Array, "nodes seq_length letters"], tree : Fl
         Returns: 
             ans : traversal cost
     '''
+    # tree = tree.at[-1,-1].set(1)
+    
 
     if(verbose==True):
         show_graph_with_labels(discretize_tree_topology(tree, n_all),n_leaves)
@@ -255,6 +261,43 @@ def compute_cost_recursive(tree : Float[Array, "nodes nodes"], verbose=False) ->
     return abs(jnp.array(visited) - 1).sum() #params['t'].shape[0] - sum(visited) +  conflicts
 
 
+@jit
+def _h(W):
+    '''
+        DAGs with NO TEARS: Continuous Optimization for Structure Learning
+        Authors : Zheng, Xun, Bryon Aragam, Pradeep K. Ravikumar, and Eric P. Xing.
+    '''
+    W = W.at[-1,-1].set(0) #reset
+    
+    """Evaluate value and gradient of acyclicity constraint."""
+    E = slin.expm(W * W)  # (Zheng et al. 2018)
+    
+    d = W.shape[0]
+    h = jnp.trace(E) - d
+    #     # A different formulation, slightly faster at the cost of numerical stability
+    #     M = np.eye(d) + W * W / d  # (Yu et al. 2019)
+    #     E = np.linalg.matrix_power(M, d - 1)
+    #     h = (E.T * M).sum() - d
+    G_h = E.T * W * 2
+    return h#, G_h
+
+
+def _h_det(W, s=1.01):
+    '''
+        DAGMA: Learning DAGs via M-matrices and a Log-Determinant Acyclicity Characterization
+        Authors : Bello, Kevin and Aragam, Bryon and Ravikumar, Pradeep
+    '''
+    
+    d = W.shape[0]
+    Id = jnp.eye(d)#.astype(self.dtype)
+    
+    """Evaluate value and gradient of the logdet acyclicity constraint."""
+    M = s * Id - W * W
+    h = - la.slogdet(M)[1] + d * jnp.log(s)
+    #G_h = 2 * W * slin.inv(M).T 
+    
+    return h
+
 def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
     """Computes the total loss for a given set of sequences and a tree
 
@@ -280,16 +323,59 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
     if(metadata['args']['fix_tree']):
         t_ = base_tree
     else:   
-        t_ = differentiable_upgma(params['t'])#update_tree(params, base_tree)
+        t_ = update_tree(params, base_tree)
+    
+    
+    recurse_cost = _h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
+
+    cost_surrogate = compute_cost(seqs_,t_, metadata) # surrogate traversal cost
+
+    tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
+    
+    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost)
+
+    if(verbose):
+        cost           = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
+        return cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss
+
+    return loss
+
+
+def compute_loss_upgma(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
+    """Computes the total loss for a given set of sequences and a tree
+
+    Args:
+        params : contains the tree and seq trainable parameters
+        seqs   : sequences array. shape = (n_all, length, n_letters
+        base_tree : base tree with zeros
+        metadata (Dict) : contains the metadata
+        temp (Float) : temperature for the loss
+        verbose : returns individual loss item if True. Defaults to False.
+
+    Returns:
+        cost : total loss
+    """    
+    n_leaves = metadata['n_leaves']
+    n_all    = metadata['n_all']
+
+    if(metadata['args']['fix_seqs']):
+        seqs_ = seqs
+    else:
+        seqs_ = update_seq(params, seqs, temp )
+    
+    if(metadata['args']['fix_tree']):
+        t_ = base_tree
+    else:   
+        t_ = differentiable_upgma(params['t'], [0.1, 1, 0.5+temp])#update_tree(params, base_tree)
     
     
     recurse_cost = 0 #compute_cost_recursive(t_, verbose = False)
 
     cost_surrogate = compute_cost(seqs_,t_, metadata) # surrogate traversal cost
     
-    tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
+    tree_force_loss, loop_loss, bidirection_loss = 0.0, 0.0, 0.0 #enforce_graph(t_,10,metadata)
     
-    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost*500)
+    loss = cost_surrogate #+ temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost*500)
 
     if(verbose):
         cost           = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
