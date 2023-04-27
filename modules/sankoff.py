@@ -79,7 +79,7 @@ def backtrack_dp(node, letter, seq_chars, connections, args):
             seq_chars : filled sequence table (computed ancestor sequences)
     '''
 
-    if(node <= args['n_letters']): #break if it's a leaf
+    if(node < args['n_leaves']): #break if it's a leaf
         return seq_chars
 
 
