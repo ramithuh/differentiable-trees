@@ -22,6 +22,7 @@ from jaxtyping import Array, Float
 from modules.vis_utils import *
 from modules.tree_func import *
 from modules.gt_tree_gen import *
+from modules.sankoff import *
 
 from matplotlib import rc
 import plotly.express as px
@@ -47,6 +48,8 @@ parser.set_defaults(groundtruth=True)
 
 
 parser.add_argument('-n','--notes'       , help='notes'            , required=False, type = str, default = '')
+parser.add_argument('-t','--tags'        , help='notes'            , required=False, type = str, default = 'default')
+
 #tree and seq generate parameters
 parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False, type = int)
 parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False, type = int)
@@ -114,7 +117,7 @@ metadata = {
     }
 
 wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
-wandb.init(project="Results-summary", name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order"], notes = args['notes'])
+wandb.init(project="Results-summary", name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order", args['tags']], notes = args['notes'])
 
 print(pretty_print_dict(metadata))
 
@@ -122,6 +125,7 @@ print(pretty_print_dict(metadata))
 metadata['exp_name'] = None
 metadata['args']['notes'] = None
 args['notes'] = None
+args['tags'] = None
 
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])
@@ -144,6 +148,22 @@ if(args['groundtruth']):
     #if we don't want tree to change, set base_tree to tree
     if(args['fix_tree']):
         base_tree = tree
+        
+        ## since we fix the tree, let's get the real groundtruths using sankoff algorithm! 🎉 
+        cost_mat = jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)
+        
+        # print(jnp.argmax(seqs, axis = 2).shape)
+        # print(tree)
+        # print(jnp.argmax(seqs, axis = 2))
+        sankoff_seqs, _ = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
+        
+        wandb.log(
+            {
+                'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
+                'sankoff_cost': _,
+                'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.bfloat16), tree, metadata, surrogate_loss = False)
+                    #compute_cost(sankoff_seqs, tree, metadata, surrogate_loss = False)
+            })
         
     if(args['shuffle_seqs']):        
         shuffled_leaves = jax.random.permutation(key, seqs[0:n_leaves], independent=False) 
