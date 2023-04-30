@@ -18,7 +18,7 @@ def parse_args():
 
     parser.add_argument('-ai','--alternate_interval', help='alternate_interval', required=False, type = int)
     parser.add_argument('-tLs','--tree_loss_schedule' , help='tree loss schedule', required=False, type = str)
-    parser.add_argument('-lr','--learning_rate'      , help='learning rate'    , required=False, type = float)
+    parser.add_argument('-lr','--learning_rate'      , help='learning rate'    , required=False, type = float, default = 0.1)
 
     ## what to train?
     parser.add_argument('-fs', '--fix_seqs', action='store_true', help='Fix sequences when training ?')

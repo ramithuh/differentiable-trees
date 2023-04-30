@@ -50,7 +50,8 @@ n_all       = n_leaves + n_ancestors
 n_mutations = int(args['mutations']) if args['mutations']!=None else 3
 n_letters   = int(args['letters']) if args['letters']!=None else 21
 
-args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.02,1,50]
+args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [1,0.25,100,100] #start, increment, end, interval
+ 
  
 metadata = {
     'n_all' : n_all,
@@ -63,7 +64,7 @@ metadata = {
     'exp_name' : f"l={n_leaves}, m={n_mutations}, s={seq_length}, fs={args['fix_seqs']}, ft={args['fix_tree']}" ,
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
-    'lr': 0.001 if args['learning_rate']==None else args['learning_rate'],
+    'lr': args['learning_rate'],
     'epochs': 200000,
     'tLs': args['tree_loss_schedule'] # #tree loss schedule
     }
@@ -108,6 +109,7 @@ if(args['groundtruth']):
     gt_tree_force_loss, gt_loop_loss, gt_bidirection_loss = enforce_graph(tree, 10, metadata)
 
     wandb.log({
+        "epoch": -1, 
         "Groundtruth Tree" : wandb.Image(gt_tree),
         "Groundtruth Seq" : wandb.data_types.Plotly(gt_seqs_plot),
 
@@ -121,7 +123,7 @@ if(args['groundtruth']):
     
 #### Define parameters (t and the ancestor sequences)
 params : Dict[str, Array] = {
-    't': jax.random.normal(key, (n_leaves,n_leaves))
+    't': jax.random.normal(key, (n_leaves,n_leaves)).astype(jnp.bfloat16)
     }
 
 tree_mask = {}
@@ -164,7 +166,7 @@ fig2 = show_graph_with_labels(discretize_tree_topology(differentiable_upgma(para
 
 
 
-compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
+compute_loss_upgma(params, seqs, base_tree, metadata, metadata['tLs'][0])
 
 #### Training loop
 for _ in range(metadata['epochs']):
@@ -190,7 +192,7 @@ for _ in range(metadata['epochs']):
         if(args['fix_tree']): 
             t_ = base_tree
         else:
-            t_ = differentiable_upgma(params['t'])
+            t_ = differentiable_upgma(params['t'], [0.1, 1, 0.5 + metadata['tLs'][0]])
             #t_ = update_tree(params, base_tree)
         t_d           = discretize_tree_topology(t_,n_all)
         tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, True)
@@ -206,11 +208,11 @@ for _ in range(metadata['epochs']):
     ## Compute the loss and the metrics for loggings purposes
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
-    grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0])
-    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
+    grads = jax.grad(compute_loss_upgma)(params, seqs, base_tree, metadata, metadata['tLs'][0])
+    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss = compute_loss_upgma(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
     ## Log the metrics
-    if(_%100==0):
+    if(_%1==0):
         wandb.log(
             {"epoch":_, 
 
@@ -221,17 +223,20 @@ for _ in range(metadata['epochs']):
             "loop loss": loop_loss,
             "recusive loss": recurse_cost,
             "bidirection loss": bidirection_loss,
+            "tLs":metadata['tLs'][0]})
 
+    if(_%100==0):
+        wandb.log({
             "tree":wandb.Image(tree_at_epoch),
             "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
             "Seq":wandb.data_types.Plotly(new_seq),
             "last ancestor" :  wandb.data_types.Plotly(px.imshow((seqs_[-1]), text_auto=True)),
-            "tLs":metadata['tLs'][0],})
+            })
 
     if(_%100==0):
         print("epoch ",_, end = " ")
         print(metadata['tLs'][0], end = " ")
-        print("{:.5f}".format(loss,end = " \n"))
+        print("{:.5f}".format(loss.item(),end = " \n"))
     
     #=> Update the parameters
     updates, opt_state = optimizer.update(grads, opt_state, params)

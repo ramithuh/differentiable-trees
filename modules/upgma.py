@@ -116,7 +116,7 @@ def mask_matrix(mat : Float[Array, "nodes nodes"], idx : Float[Array, "options"]
     return sol
 
 @jit
-def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], e : List[Float] = [0.01, 2, 5], verbose : bool = False) -> Float[Array, "all_nodes all_nodes"]:
+def differentiable_upgma(dm : Float[Array, "initial_nodes initial_nodes"], e : List[Float] = [0.1, 1, 0.5], verbose : bool = False) -> Float[Array, "all_nodes all_nodes"]:
     '''
         Given a distance matrix, return the UPGMA tree
         Code was inspired by : http://ls50.solab.org/week_5, after looking at how UPGMA is implemented

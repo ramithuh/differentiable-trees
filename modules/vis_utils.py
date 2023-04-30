@@ -59,6 +59,7 @@ def show_graph_with_labels(adjacency_matrix, n_leaves, return_img = False):
       Returns:
         None
     '''
+    
     label_names = {}
     
     for i in range(0,adjacency_matrix.shape[0]):
@@ -129,7 +130,7 @@ def animate_tree(adjacency_matrix, n_leaves, n_ancestors, total_frames = None):
     def update(ii):
 
     #     s = adjacency_matrix2[ii]
-    #     discretized = jnp.round(combine_to_seq(params, seqs))
+    #     discretized = jnp.round(update_seq(params, seqs))
     #     cost_ = compute_cost(discretized, s, average = False)
 
     #     s_ = jnp.arange(0,n_all,1)
