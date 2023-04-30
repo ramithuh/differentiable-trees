@@ -124,6 +124,8 @@ print(pretty_print_dict(metadata))
 ## JAX Doesn't like some data types when jitting
 metadata['exp_name'] = None
 metadata['args']['notes'] = None
+metadata['notes'] = None
+metadata['tags'] = None
 args['notes'] = None
 args['tags'] = None
 
@@ -149,20 +151,20 @@ if(args['groundtruth']):
     if(args['fix_tree']):
         base_tree = tree
         
-        ## since we fix the tree, let's get the real groundtruths using sankoff algorithm! 🎉 
+    if(True):
+        ## since we know the gt tree, let's get the real ancestors using sankoff algorithm! 🎉 
+        ## This will help us to see whether there's a better groundtruth ancestors for this tree
         cost_mat = jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)
         
-        # print(jnp.argmax(seqs, axis = 2).shape)
-        # print(tree)
-        # print(jnp.argmax(seqs, axis = 2))
+        print("running sankoff on groundtruth tree")
         sankoff_seqs, _ = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
+        print("done running sankoff on groundtruth tree")
         
         wandb.log(
             {
                 'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
                 'sankoff_cost': _,
                 'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.bfloat16), tree, metadata, surrogate_loss = False)
-                    #compute_cost(sankoff_seqs, tree, metadata, surrogate_loss = False)
             })
         
     if(args['shuffle_seqs']):        
