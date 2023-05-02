@@ -220,11 +220,20 @@ else:
 
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
+    raise Warning("Initializing tree using groundtruth tree")
     params['t'] = tree[0:-1,n_leaves:]*10
     
 #### Add the ancestor sequences to the parameters
 for i in range(0, n_ancestors):
-    params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
+    
+    if(args['initialize_seq']):
+        if(n_leaves > 1024):
+            raise NotImplementedError("Sankoff backtracking not implemented for n_leaves > 1024 due to execution time")
+        else:
+            raise Warning("Initializing sequences using sankoff ancestors")
+            params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.bfloat16)*100
+    else:
+        params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
 
     if(args['alternate_optimization'] or args['fix_seqs']):
         tree_mask[str(i)]  = 'fixed'
