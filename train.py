@@ -8,6 +8,8 @@ import jax.numpy as jnp
 import jax.nn as nn
 
 import jax
+jax.config.update("jax_default_device", jax.devices("cpu")[0]) ## use cpu for the time being 
+
 import optax
 import wandb
 import argparse
@@ -80,7 +82,15 @@ parser.set_defaults(initialize_seq=False)
 parser.add_argument('-alt', '--alternate_optimization', action='store_true', help='Alternate tree and seq optimization?')
 parser.set_defaults(alternate_optimization=False)
 
+parser.add_argument('-g','--gpu', help='specify device', required=False, type = int)
+
 args = vars(parser.parse_args())
+
+if(args['gpu']!=None):
+    print(f"using gpu -> {args['gpu']}")
+    jax.config.update("jax_default_device", jax.devices("gpu")[args['gpu']])
+else:
+    jax.config.update("jax_default_device", jax.devices("cpu")[0])
 
 ### set contradictory arguments (otherwise could be confusing in wandb)
 if(args['fix_seqs']):
