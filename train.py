@@ -14,6 +14,7 @@ import optax
 import wandb
 import argparse
 import functools
+import warnings
 
 import pydot
 import numpy as np
@@ -122,7 +123,7 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': 0.001 if args['learning_rate']==None else args['learning_rate'],
-    'epochs': 200000,
+    'epochs': 10000,
     'tLs': args['tree_loss_schedule'] # #tree loss schedule
     }
 
@@ -220,7 +221,7 @@ else:
 
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
-    raise Warning("Initializing tree using groundtruth tree")
+    warnings.warn("Initializing tree using groundtruth tree", UserWarning)
     params['t'] = tree[0:-1,n_leaves:]*10
     
 #### Add the ancestor sequences to the parameters
@@ -230,7 +231,7 @@ for i in range(0, n_ancestors):
         if(n_leaves > 1024):
             raise NotImplementedError("Sankoff backtracking not implemented for n_leaves > 1024 due to execution time")
         else:
-            raise Warning("Initializing sequences using sankoff ancestors")
+            warnings.warn("Initializing sequences using sankoff ancestors", UserWarning)
             params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.bfloat16)*100
     else:
         params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
