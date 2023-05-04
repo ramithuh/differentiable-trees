@@ -90,12 +90,15 @@ def pretty_print_dict(d):
     return formatted_dict
 
 def print_critical_info(msg):
-    print(f"{bc.FAIL}{bc.BOLD} INFO : {msg} {bc.ENDC}", end = "")
+    print(f"{bc.FAIL}{bc.BOLD}INFO : {msg} {bc.ENDC}", end = "")
     
 def print_warning_info(msg):
-    print(f"{bc.WARNING}{bc.BOLD} WARNING : {msg} {bc.ENDC}", end = "")
+    print(f"{bc.WARNING}{bc.BOLD}WARNING : {msg} {bc.ENDC}", end = "")
 
 def print_bold_info(msg):
-    print(f"{bc.BOLD} {msg} {bc.ENDC}", end = "")
+    print(f"{bc.BOLD}{msg} {bc.ENDC}", end = "")
+    
+def print_success_info(msg):
+    print(f"{bc.OKGREEN}{bc.BOLD}{msg} {bc.ENDC}", end = "")
     
 warnings.formatwarning = custom_formatwarning
