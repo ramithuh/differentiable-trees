@@ -1,37 +1,34 @@
 import os
 import sys
-
-if(os.path.exists('/content/sample_data')):
-  sys.path.append('differentiable-trees/')
-
-import jax.numpy as jnp
-import jax.nn as nn
-
-import jax
-jax.config.update("jax_default_device", jax.devices("cpu")[0]) ## use cpu for the time being 
-
 import optax
 import wandb
+import pydot
+import warnings
 import argparse
 import functools
-import warnings
-
-import pydot
 import numpy as np
-
 from typing import Dict
-from jaxtyping import Array, Float
-
-from modules.vis_utils import *
-from modules.tree_func import *
-from modules.gt_tree_gen import *
-from modules.sankoff import *
 
 from matplotlib import rc
 import plotly.express as px
 rc('animation', html='jshtml')
 
-from arg_parser import *
+import jax
+## use cpu for the time being, let's see whether user requested a gpu later.
+jax.config.update("jax_default_device", jax.devices("cpu")[0]) 
+import jax.nn as nn
+import jax.numpy as jnp
+from jax.lib import xla_bridge
+from jaxtyping import Array, Float
+
+if(os.path.exists('/content/sample_data')):
+  sys.path.append('differentiable-trees/')
+
+from modules.vis_utils import *
+from modules.tree_func import *
+from modules.gt_tree_gen import *
+from modules.sankoff import *
+from arg_parser_v2 import *
 
 def invert_dict(dictionary):
   new_dict = dictionary
@@ -43,73 +40,19 @@ def invert_dict(dictionary):
 
   return new_dict
 
-#### Parse arguments
-parser = argparse.ArgumentParser(description='Train a differentiable tree model. \n sample usage :  python train.py -l 8 -m 10 -sl 50 -fs')
-
-parser.add_argument('-gt', '--groundtruth', action='store_true', help='Retrieve groundtruth?')
-parser.set_defaults(groundtruth=True)
-
-
-parser.add_argument('-n','--notes'       , help='notes'            , required=False, type = str, default = '')
-parser.add_argument('-t','--tags'        , help='notes'            , required=False, type = str, default = 'default')
-
-#tree and seq generate parameters
-parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False, type = int)
-parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False, type = int)
-parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False, type = int)
-parser.add_argument('-nl','--letters'    , help='# of letters?'    , required=False, type = int)
-parser.add_argument('-s','--seed'        , help='seed'            , required=False, type = int)
-
-parser.add_argument('-ai','--alternate_interval', help='alternate_interval', required=False, type = int)
-parser.add_argument('-tLs','--tree_loss_schedule' , help='tree loss schedule', required=False, type = str)
-parser.add_argument('-lr','--learning_rate'      , help='learning rate'    , required=False, type = float)
-
-## what to train?
-parser.add_argument('-fs', '--fix_seqs', action='store_true', help='Fix sequences when training ?')
-parser.set_defaults(fix_seqs=False)
-
-parser.add_argument('-shs', '--shuffle_seqs', action='store_true', help='Shuffle groundtruth sequences?')
-parser.set_defaults(shuffle_seqs=False)
-
-parser.add_argument('-ft', '--fix_tree', action='store_true', help='Fix tree when training ?')
-parser.set_defaults(fix_tree=False)
-
-parser.add_argument('-it', '--initialize_tree', action='store_true', help='Initialize Tree with groundtruth?')
-parser.set_defaults(initialize_tree=False)
-
-parser.add_argument('-is', '--initialize_seq', action='store_true', help='Initialize Seq with groundtruth?')
-parser.set_defaults(initialize_seq=False)
-
-parser.add_argument('-alt', '--alternate_optimization', action='store_true', help='Alternate tree and seq optimization?')
-parser.set_defaults(alternate_optimization=False)
-
-parser.add_argument('-g','--gpu', help='specify device', required=False, type = int)
-
-args = vars(parser.parse_args())
-
-if(args['gpu']!=None):
-    print(f"using gpu -> {args['gpu']}")
-    jax.config.update("jax_default_device", jax.devices("gpu")[args['gpu']])
-else:
-    jax.config.update("jax_default_device", jax.devices("cpu")[0])
-
-### set contradictory arguments (otherwise could be confusing in wandb)
-if(args['fix_seqs']):
-    args['initialize_seq'] = True #if we fix seqs, automatically this is true
-
-if(args['fix_tree']):
-    args['initialize_tree'] = True  #if we fix tree, automatically this is true
+## Parse Command Line Arguments and perform checks
+args = vars(parse_args_v2())
+args = sanity_check(args)
 
 #### Define Sequence length and number of leaves
 seq_length  = int(args['seq_length']) if args['seq_length']!=None else 20
-
 n_leaves    = int(args['leaves']) if args['leaves']!=None else 4
 n_ancestors = n_leaves - 1
 n_all       = n_leaves + n_ancestors
 n_mutations = int(args['mutations']) if args['mutations']!=None else 3
 n_letters   = int(args['letters']) if args['letters']!=None else 20
 
-args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.02,1,50]
+args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.01,100,2]
  
 metadata = {
     'n_all' : n_all,
@@ -123,12 +66,20 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': 0.001 if args['learning_rate']==None else args['learning_rate'],
-    'epochs': 10000,
-    'tLs': args['tree_loss_schedule'] # #tree loss schedule
+    'epochs': 1e4,
+    'tLs': args['tree_loss_schedule'] #tree loss schedule
     }
 
 wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
 wandb.init(project="Results-summary", name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order", args['tags']], notes = args['notes'])
+
+if(args['gpu']!=None):
+    print_critical_info(f"Utilizing gpu -> {args['gpu']} \n")
+    jax.config.update("jax_default_device", jax.devices("gpu")[args['gpu']])
+else:
+    if(xla_bridge.get_backend().platform == "gpu"):
+        print_critical_info("There's a gpu available, but you didn't specify to use it 😏. So using cpu instead 🤷🏻‍♂️. \n")    
+    jax.config.update("jax_default_device", jax.devices("cpu")[0])
 
 print(pretty_print_dict(metadata))
 
@@ -326,7 +277,7 @@ for _ in range(metadata['epochs']):
             "tLs":metadata['tLs'][0],})
 
     if(_%100==0):
-        print("epoch ",_, end = " ")
+        print_bold_info("epoch ")
         print(metadata['tLs'][0], end = " ")
         print("{:.5f}".format(loss,end = " \n"))
     
