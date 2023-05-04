@@ -66,12 +66,12 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': 0.001 if args['learning_rate']==None else args['learning_rate'],
-    'epochs': 1e4,
+    'epochs': 10000,
     'tLs': args['tree_loss_schedule'] #tree loss schedule
     }
 
 wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
-wandb.init(project="Results-summary", name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order", args['tags']], notes = args['notes'])
+wandb.init(project="Batch-Run-Small-Parsimony", name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order", args['tags']], notes = args['notes'])
 
 if(args['gpu']!=None):
     print_critical_info(f"Utilizing gpu -> {args['gpu']} \n")
@@ -79,6 +79,7 @@ if(args['gpu']!=None):
 else:
     if(xla_bridge.get_backend().platform == "gpu"):
         print_critical_info("There's a gpu available, but you didn't specify to use it 😏. So using cpu instead 🤷🏻‍♂️. \n")    
+        print(f"Available GPUs: {jax.devices('gpu')}")
     jax.config.update("jax_default_device", jax.devices("cpu")[0])
 
 print(pretty_print_dict(metadata))
@@ -119,13 +120,13 @@ if(args['groundtruth']):
         cost_mat = jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)
         
         print("running sankoff on groundtruth tree")
-        sankoff_seqs, _ = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
+        sankoff_seqs, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
         print("done running sankoff on groundtruth tree")
         
         wandb.log(
             {
                 'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
-                'sankoff_cost': _,
+                'sankoff_cost': sankoff_cost,
                 'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.bfloat16), tree, metadata, surrogate_loss = False)
             })
         
@@ -172,7 +173,7 @@ else:
 
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
-    warnings.warn("Initializing tree using groundtruth tree", UserWarning)
+    print_critical_info("Initializing tree using groundtruth tree \n")
     params['t'] = tree[0:-1,n_leaves:]*10
     
 #### Add the ancestor sequences to the parameters
@@ -182,7 +183,7 @@ for i in range(0, n_ancestors):
         if(n_leaves > 1024):
             raise NotImplementedError("Sankoff backtracking not implemented for n_leaves > 1024 due to execution time")
         else:
-            warnings.warn("Initializing sequences using sankoff ancestors", UserWarning)
+            print_critical_info("Initializing sequences using sankoff ancestors \n")
             params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.bfloat16)*100
     else:
         params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
@@ -277,9 +278,9 @@ for _ in range(metadata['epochs']):
             "tLs":metadata['tLs'][0],})
 
     if(_%100==0):
-        print_bold_info("epoch ")
-        print(metadata['tLs'][0], end = " ")
-        print("{:.5f}".format(loss,end = " \n"))
+        print_bold_info(f"epoch {_}")
+        print("{:.3f}".format(metadata['tLs'][0]), end = " ")
+        print("{:.3f}".format(loss,end = " \n"))
     
     #=> Update the parameters
     updates, opt_state = optimizer.update(grads, opt_state, params)
@@ -288,3 +289,14 @@ for _ in range(metadata['epochs']):
     ### update the tree loss schedule
     if(_%metadata['tLs'][3]==0):
         metadata['tLs'][0] = min(metadata['tLs'][2], metadata['tLs'][0] + metadata['tLs'][1])
+        
+print_success_info("Optimization done!\n")
+print_success_info("Sankoff cost for groundtruth tree: {:.5f}\n".format(sankoff_cost))
+print_success_info("Final cost: {:.5f}\n".format(cost))
+
+if(abs(sankoff_cost - cost) == 0):
+    print_success_info("Optimization succeeded! Reached groundtruth 🚀\n")
+    wandb.log({"success":True, "Error" : 0})
+else:
+    wandb.log({"success":False, "Error" : abs(sankoff_cost - cost)})
+# print_success_info("Final error: {:.5f}".format(sankoff_cost))
