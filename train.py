@@ -71,7 +71,7 @@ metadata = {
     }
 
 wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
-wandb.init(project="Batch-Run-Small-Parsimony", name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order", args['tags']], notes = args['notes'])
+wandb.init(project="Batch-Run-Small-Parsimony-A100", name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order", args['tags']], notes = args['notes'])
 
 if(args['gpu']!=None):
     print_critical_info(f"Utilizing gpu -> {args['gpu']} \n")

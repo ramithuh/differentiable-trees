@@ -2,6 +2,14 @@ import subprocess
 import os
 import math
 
+class NamedPopen(subprocess.Popen):
+     """
+     Like subprocess.Popen, but returns an object with a .name member
+     """
+     def __init__(self, *args, name=None, **kwargs):
+         self.name = name
+         super().__init__(*args, **kwargs)
+        
 print("Which GPU do you want to restrict to?")
 id = input()
 os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
@@ -34,10 +42,12 @@ for l in leaves:
         cmd_with_seed = cmd + ["-s", str(seed)]
 
         # Run the command with the modified seed
-        print(f"-> Running for seed {seed}:")
-        result = subprocess.run(cmd_with_seed, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        print(f"-> Running for seed {seed}: ", end =", ")
         
-        # Print the output (optional)
-        # print(result.stdout)
-        # print(result.stderr)
-        # print("\n")
+        #Use Popen instead of run and store the process object
+        process = subprocess.Popen(cmd_with_seed, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        
+        #Print the PID
+        print(f"PID: {process.pid}")
+        
+        process.wait()
