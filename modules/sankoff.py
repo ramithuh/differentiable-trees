@@ -124,7 +124,7 @@ def run_sankoff(adj, cost_mat, seq, metadata):
     
     node = adj.shape[0] - 1
 
-    if(seq.shape[0] <  128): # if too many sequences don't backtrack and find best ancestors, cost is enough
+    if(seq.shape[0] <=  1024): # if too many sequences don't backtrack and find best ancestors, cost is enough
         for i in range(0,seq.shape[1]):
             letter = jnp.argmin(dp[i,node,:]).astype(int)
 

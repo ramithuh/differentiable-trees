@@ -74,8 +74,11 @@ def update_seq(params : Dict[str, Array], seqs : Float[Array, "nodes letters"], 
     for i in range(0, n_all - n_leaves):
         key = str(i) #chr(97+i + n_leaves)
         
+        # print(params[key].shape)
+        # print(seq.shape)
+        # break
         seq      = nn.softmax(temperature*params[key])
-        hard_seq = (seq > 0.5).astype(int)
+        #hard_seq = (seq > 0.5).astype(int)
         
         seqs = seqs.at[- n_leaves + i + 1].set(seq)
         #seqs = seqs.at[- n_leaves + i + 1].set(jax.lax.stop_gradient(hard_seq - seq) + seq)
@@ -169,7 +172,9 @@ def compute_cost(sequences : Float[Array, "nodes seq_length letters"], tree : Fl
         '''
         out = jnp.transpose(selection, (1,2,0))
         ans = (jnp.sum(abs((out - sequences)), axis = [1,2])/(2)).sum()
-
+        
+        # ans = (jnp.sum((out - sequences)**2, axis = [1,2])/(2)).sum() # L2 loss
+ 
         #ans = ((nn.sigmoid((abs(selection - sequences))) - 0.5)*2).sum() ## works currently as sm is the basic config. need to think about extending
     else:
         '''
@@ -282,6 +287,7 @@ def _h(W):
     return h#, G_h
 
 
+@jit
 def _h_det(W, s=1.01):
     '''
         DAGMA: Learning DAGs via M-matrices and a Log-Determinant Acyclicity Characterization

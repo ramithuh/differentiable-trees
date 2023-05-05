@@ -52,7 +52,7 @@ n_all       = n_leaves + n_ancestors
 n_mutations = int(args['mutations']) if args['mutations']!=None else 3
 n_letters   = int(args['letters']) if args['letters']!=None else 20
 
-args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.01,100,2]
+args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.01,100,5]
  
 metadata = {
     'n_all' : n_all,
@@ -66,7 +66,7 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': 0.001 if args['learning_rate']==None else args['learning_rate'],
-    'epochs': 10000,
+    'epochs': 3000,
     'tLs': args['tree_loss_schedule'] #tree loss schedule
     }
 
