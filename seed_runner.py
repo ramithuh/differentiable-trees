@@ -1,14 +1,6 @@
 import subprocess
 import os
 import math
-
-class NamedPopen(subprocess.Popen):
-     """
-     Like subprocess.Popen, but returns an object with a .name member
-     """
-     def __init__(self, *args, name=None, **kwargs):
-         self.name = name
-         super().__init__(*args, **kwargs)
         
 print("Which GPU do you want to restrict to?")
 id = input()
@@ -29,7 +21,7 @@ print("ok will run for the following leaf complexities:")
 print(leaves)
 
 # Common command and arguments
-base = ["python", "train.py", "-nl", "20", "-m", "50", "-sl", "256", "-tLs", "[0,0.01,100,5]", "-lr", "0.01", "-n", "Batch Run", "-ft", "-t", "small_parsimony"]
+base = ["python", "train.py", "-nl", "20", "-m", "50", "-sl", "256", "-tLs", "[0,0.01,100,3]", "-lr", "0.01", "-n", "Batch Run", "-ft", "-t", "small_parsimony"]
 base = base + ["-g", "0"]
 
 for l in leaves:
