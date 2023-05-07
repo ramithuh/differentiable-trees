@@ -71,14 +71,14 @@ def sanity_check(args_):
     args = args_.copy()
     
     if(args['fix_seqs']):
-        args['initialize_seq'] = True #if we fix seqs, automatically this is true
-        warnings.warn("Hey, you just asked to fix seqs, but said don't init with them. Note that fixing means init as well :) so making that True", UserWarning)
+        warnings.warn("Hey, you just asked to fix seqs. Hope you are sure about the decision.", UserWarning)
         
-
     if(args['fix_tree']):
-        args['initialize_tree'] = True  #if we fix tree, automatically this is true
-        warnings.warn("Hey, you just asked to fix tree, but said don't init with them. Note that fixing means init as well :) so making that True", UserWarning)
-        
+        warnings.warn("Hey, you just asked to fix tree, Hope you are sure about the decision.", UserWarning)
+    
+    if(args['fix_tree'] and args['fix_seqs']):
+        raise ValueError("Hey, you just asked to fix tree and seqs both! that what should we optimize???")
+    
     return args
 
 def pretty_print_dict(d):

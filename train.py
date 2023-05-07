@@ -114,7 +114,7 @@ if(args['groundtruth']):
     if(args['fix_tree']):
         base_tree = tree
         
-    if(True):
+    if(not(args['fix_seqs'])):
         ## since we know the gt tree, let's get the real ancestors using sankoff algorithm! 🎉 
         ## This will help us to see whether there's a better groundtruth ancestors for this tree
         cost_mat = jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)
@@ -291,12 +291,23 @@ for _ in range(metadata['epochs']):
         metadata['tLs'][0] = min(metadata['tLs'][2], metadata['tLs'][0] + metadata['tLs'][1])
         
 print_success_info("Optimization done!\n")
-print_success_info("Sankoff cost for groundtruth tree: {:.5f}\n".format(sankoff_cost))
 print_success_info("Final cost: {:.5f}\n".format(cost))
 
-if(abs(sankoff_cost - cost) == 0):
+if(args['fix_tree']):
+    print_success_info("Sankoff cost for groundtruth tree: {:.5f}\n".format(sankoff_cost))
+    target_cost = sankoff_cost
+elif(args['fix_seqs']):
+    print_success_info("Groundtruth tree cost: {:.5f}\n".format(gt_cost))
+    target_cost = gt_cost
+else:
+    print_critical_info("No groundtruth to compare to\n")
+    target_cost = 0
+
+
+if(abs(target_cost - cost) == 0):
     print_success_info("Optimization succeeded! Reached groundtruth 🚀\n")
     wandb.log({"success":True, "Error" : 0})
 else:
     wandb.log({"success":False, "Error" : abs(sankoff_cost - cost)})
+
 # print_success_info("Final error: {:.5f}".format(sankoff_cost))
