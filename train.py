@@ -225,7 +225,7 @@ for _ in range(metadata['epochs']):
         if(_ % args['alternate_interval'] == 0 and _>0):
             #if we are in ALT mode switch the mask
             tree_mask = invert_dict(tree_mask)
-            print(" mask: ", tree_mask)
+            # print(" mask: ", tree_mask)
 
             optimizer = optax.multi_transform(
                         {
