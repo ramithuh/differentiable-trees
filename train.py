@@ -66,12 +66,12 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': 0.001 if args['learning_rate']==None else args['learning_rate'],
-    'epochs': 5000,
+    'epochs': args['epochs'],
     'tLs': args['tree_loss_schedule'] #tree loss schedule
     }
 
 wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
-wandb.init(project="Batch-Run-Small-Parsimony-A100", name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order", args['tags']], notes = args['notes'])
+wandb.init(project=args['project'], name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order", args['tags']], notes = args['notes'])
 
 if(args['gpu']!=None):
     print_critical_info(f"Utilizing gpu -> {args['gpu']} \n")
@@ -88,9 +88,11 @@ print(pretty_print_dict(metadata))
 metadata['exp_name'] = None
 metadata['args']['notes'] = None
 metadata['notes'] = None
-metadata['tags'] = None
+metadata['tags']  = None
+metadata['project'] = None
 args['notes'] = None
 args['tags'] = None
+args['project'] = None
 
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])

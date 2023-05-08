@@ -28,13 +28,15 @@ def parse_args_v2():
     parser.add_argument('-gt', '--groundtruth', action='store_true', help='Retrieve groundtruth?')
     parser.set_defaults(groundtruth=True)
 
+    parser.add_argument('-p','--project'     , help='wandb project'            , required=True, type = str, default = 'test')
+    parser.add_argument('-n','--notes'       , help='wandb notes'            , required=False, type = str, default = '')
+    parser.add_argument('-t','--tags'        , help='wandb tags'            , required=False, type = str, default = 'default')
 
-    parser.add_argument('-n','--notes'       , help='notes'            , required=False, type = str, default = '')
-    parser.add_argument('-t','--tags'        , help='notes'            , required=False, type = str, default = 'default')
+    parser.add_argument('-e','--epochs'      , help='# of epochs?'    , required=True, type = int)
 
     #tree and seq generate parameters
-    parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=False, type = int)
-    parser.add_argument('-m','--mutations'   , help='# of leaves?'    , required=False, type = int)
+    parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=True, type = int)
+    parser.add_argument('-m','--mutations'   , help='# of muations?'  , required=False, type = int)
     parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False, type = int)
     parser.add_argument('-nl','--letters'    , help='# of letters?'    , required=False, type = int)
     parser.add_argument('-s','--seed'        , help='seed'            , required=False, type = int)
