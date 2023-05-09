@@ -33,11 +33,13 @@ from arg_parser_v2 import *
 def invert_dict(dictionary):
   new_dict = dictionary
   for key in dictionary.keys():
-    if(new_dict[key] == 'fixed'):
-      new_dict[key] = 'learn'
+      
+    if('fixed' in new_dict[key]):
+        new_dict[key] = 'learn' + new_dict[key][5:]
+    elif('learn' in new_dict[key]):
+        new_dict[key] = 'fixed' + new_dict[key][5:]
     else:
-      new_dict[key] = 'fixed'
-
+        raise ValueError(f"Unknown value in {key} -> {new_dict[key]}")
   return new_dict
 
 ## Parse Command Line Arguments and perform checks
@@ -65,7 +67,8 @@ metadata = {
     'exp_name' : f"l={n_leaves}, m={n_mutations}, s={seq_length}, fs={args['fix_seqs']}, ft={args['fix_tree']}" ,
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
-    'lr': 0.001 if args['learning_rate']==None else args['learning_rate'],
+    'lr': args['learning_rate'],
+    'lr_seq' : 0.01 if args['learning_rate_seq']==None else args['learning_rate']*10,
     'epochs': args['epochs'],
     'tLs': args['tree_loss_schedule'] #tree loss schedule
     }
@@ -169,9 +172,9 @@ params : Dict[str, Array] = {
 tree_mask = {}
 
 if(args['fix_tree']):
-    tree_mask['t'] = 'fixed'
+    tree_mask['t'] = 'fixed_tree'
 else:
-    tree_mask['t'] = 'learn'
+    tree_mask['t'] = 'learn_tree'
 
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
@@ -191,16 +194,18 @@ for i in range(0, n_ancestors):
         params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
 
     if(args['alternate_optimization'] or args['fix_seqs']):
-        tree_mask[str(i)]  = 'fixed'
+        tree_mask[str(i)]  = 'fixed_seq'
     else:
-        tree_mask[str(i)]  = 'learn'
+        tree_mask[str(i)]  = 'learn_seq'
     
 #### Initialize the optimizer
 # optimizer = optax.adam(metadata['lr'])
 optimizer = optax.multi_transform(
                     {
-                     'learn': optax.adam(metadata['lr']), 
-                     'fixed': optax.set_to_zero()
+                     'learn_tree': optax.adam(metadata['lr']), 
+                     'learn_seq':  optax.adam(metadata['lr_seq']), 
+                     'fixed_tree': optax.set_to_zero(),
+                     'fixed_seq' : optax.set_to_zero()
                      },
                     tree_mask
                     )
@@ -225,15 +230,17 @@ for _ in range(metadata['epochs']):
         if(_ % args['alternate_interval'] == 0 and _>0):
             #if we are in ALT mode switch the mask
             tree_mask = invert_dict(tree_mask)
-            # print(" mask: ", tree_mask)
+            print(" mask: ", tree_mask)
 
             optimizer = optax.multi_transform(
-                        {
-                        'learn': optax.adam(metadata['lr']), 
-                        'fixed': optax.set_to_zero()
-                        },
-                        tree_mask
-                        )
+                    {
+                     'learn_tree': optax.adam(metadata['lr']), 
+                     'learn_seq':  optax.adam(metadata['lr_seq']), 
+                     'fixed_tree': optax.set_to_zero(),
+                     'fixed_seq' : optax.set_to_zero()
+                     },
+                    tree_mask
+                    )
             
             opt_state = optimizer.init(params)
 
