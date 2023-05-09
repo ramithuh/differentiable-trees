@@ -123,9 +123,9 @@ def enforce_graph(t_ : Float[Array, "nodes nodes"], s : Float, metadata = None, 
 
     tree_force_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(t_[:-1, n_all - n_ancestors: n_all], axis = 0) - 2),2))
     
-    loop_loss = jnp.multiply(jnp.identity(n_all-1), t_[:-1,:-1]).sum()*100  ## penalize self connections
+    loop_loss = 0 #jnp.multiply(jnp.identity(n_all-1), t_[:-1,:-1]).sum()*100  ## penalize self connections
     
-    bidirection_loss = jnp.sum(jnp.matmul(t_,t_)*jnp.identity(t_.shape[0]))*100 ## penalize bidirectional connections
+    bidirection_loss = 0 #jnp.sum(jnp.matmul(t_,t_)*jnp.identity(t_.shape[0]))*100 ## penalize bidirectional connections
     
     if(verbose):
         print("bifurcating tree_forcing_loss = ", tree_force_loss)
