@@ -223,6 +223,11 @@ fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params, base_
 compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 
 
+best_ans = 1e9
+best_seq = None
+best_tree = None
+
+
 #### Training loop
 for _ in range(metadata['epochs']):
 
@@ -230,7 +235,7 @@ for _ in range(metadata['epochs']):
         if(_ % args['alternate_interval'] == 0 and _>0):
             #if we are in ALT mode switch the mask
             tree_mask = invert_dict(tree_mask)
-            print(" mask: ", tree_mask)
+            #print(" mask: ", tree_mask)
 
             optimizer = optax.multi_transform(
                     {
@@ -265,8 +270,19 @@ for _ in range(metadata['epochs']):
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
     grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0])
-    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
+    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, acyclic_cost_soft, acyclic_cost, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
+        
+    if(acyclic_cost == 0):
+        ## adjacency matrix is actually a tree, at least the directed graph is acyclic
+       
+        if(cost < best_ans):
+            print_success_info("Found a better tree at epoch %d with cost %f \n" % (_, cost))
+            best_ans = cost
+            t_ = update_tree(params, base_tree)
+            best_tree = discretize_tree_topology(t_,n_all)
+            best_seq = update_seq(params, seqs, metadata['seq_temp'])
+        
     ## Log the metrics
     if(_%100==0):
         wandb.log(
@@ -277,7 +293,8 @@ for _ in range(metadata['epochs']):
             "traversal cost (surrogate)": cost_surrogate,
             "tree force loss": tree_force_loss,
             "loop loss": loop_loss,
-            "recusive loss": recurse_cost,
+            "acyclic soft loss": acyclic_cost_soft,
+            "acyclic loss" : acyclic_cost,
             "bidirection loss": bidirection_loss,
 
             "tree":wandb.Image(tree_at_epoch),
@@ -291,6 +308,7 @@ for _ in range(metadata['epochs']):
         print("{:.3f}".format(metadata['tLs'][0]), end = " ")
         print("{:.3f}".format(loss,end = " \n"))
     
+    
     #=> Update the parameters
     updates, opt_state = optimizer.update(grads, opt_state, params)
     params = optax.apply_updates(params, updates)
@@ -301,6 +319,7 @@ for _ in range(metadata['epochs']):
         
 print_success_info("Optimization done!\n")
 print_success_info("Final cost: {:.5f}\n".format(cost))
+print_success_info("Best cost encountered: {:.5f}\n".format(best_ans))
 
 if(args['fix_tree']):
     print_success_info("Sankoff cost for groundtruth tree: {:.5f}\n".format(sankoff_cost))
@@ -317,6 +336,14 @@ if(abs(target_cost - cost) == 0):
     print_success_info("Optimization succeeded! Reached groundtruth 🚀\n")
     wandb.log({"success":True, "Error" : 0})
 else:
-    wandb.log({"success":False, "Error" : abs(sankoff_cost - cost)})
+    wandb.log({"success":False, "Error" : abs(sankoff_cost - best_ans)})
 
-# print_success_info("Final error: {:.5f}".format(sankoff_cost))
+best_tree = show_graph_with_labels(best_tree, n_leaves, True)
+best_tree_adj = px.imshow(best_tree, text_auto=True)
+
+wandb.log({
+        "best cost":best_ans, 
+        "best_tree_adj" : wandb.data_types.Plotly(best_tree_adj),
+        "best_tree" : wandb.Image(best_tree),
+        "best_seq" : wandb.data_types.Plotly(px.imshow(jnp.argmax(best_seq, axis = 2), text_auto=True))
+           })

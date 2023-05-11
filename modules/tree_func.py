@@ -335,17 +335,19 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
         t_ = update_tree(params, base_tree)
     
     
-    recurse_cost = _h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
+    acyclic_cost_soft = _h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
 
     cost_surrogate = compute_cost(seqs_,t_, metadata) # surrogate traversal cost
 
     tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
     
-    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost)
+    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss + acyclic_cost_soft)
 
     if(verbose):
-        cost           = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
-        return cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss
+        cost         = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
+        acyclic_cost = _h_det(discretize_tree_topology(t_, n_all))*100
+        
+        return cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, acyclic_cost_soft, acyclic_cost, loss
 
     return loss
 
