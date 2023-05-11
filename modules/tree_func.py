@@ -14,6 +14,8 @@ from typing import Dict, List
 from jaxtyping import Array, Float
 
 from modules.upgma import differentiable_upgma
+from modules.sankoff import run_diff_sankoff
+from modules.sankoff import run_sankoff
 
 @partial(jit, static_argnums=1)
 def discretize_tree_topology(tree : Float[Array, "nodes nodes"], n_nodes : int) -> Float[Array, "nodes nodes"]:
@@ -293,6 +295,7 @@ def _h_det(W, s=1.01):
         DAGMA: Learning DAGs via M-matrices and a Log-Determinant Acyclicity Characterization
         Authors : Bello, Kevin and Aragam, Bryon and Ravikumar, Pradeep
     '''
+    W = W.at[-1,-1].set(0) #reset
     
     d = W.shape[0]
     Id = jnp.eye(d)#.astype(self.dtype)
@@ -343,6 +346,47 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
     if(verbose):
         cost           = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
         return cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss
+
+    return loss
+
+def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
+    """Computes the total loss for a given set of sequences and a tree
+
+    Args:
+        params : contains the tree and seq trainable parameters
+        seqs   : sequences array. shape = (n_all, length, n_letters
+        base_tree : base tree with zeros
+        metadata (Dict) : contains the metadata
+        temp (Float) : temperature for the loss
+        verbose : returns individual loss item if True. Defaults to False.
+
+    Returns:
+        cost : total loss
+    """    
+    n_leaves = metadata['n_leaves']
+    n_all    = metadata['n_all']
+
+    
+    if(metadata['args']['fix_tree']):
+        t_ = base_tree
+    else:   
+        t_ = update_tree(params, base_tree)
+    
+    recurse_cost = _h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
+    
+    cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters'])
+    _, cost_surrogate_sankoff = run_diff_sankoff(t_, cost_mat, seqs, metadata, epsilon = 1e-5)
+    
+   
+
+    tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
+    
+    loss = cost_surrogate_sankoff + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost)
+
+    if(verbose):
+        _, cost = run_sankoff(discretize_tree_topology(t_, n_all), cost_mat, seqs, metadata, return_path = False)
+        #compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
+        return cost, cost_surrogate_sankoff, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss
 
     return loss
 
