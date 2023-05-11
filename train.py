@@ -273,7 +273,7 @@ for _ in range(metadata['epochs']):
     cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, acyclic_cost_soft, acyclic_cost, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
 
         
-    if(acyclic_cost == 0):
+    if(acyclic_cost <= 0):
         ## adjacency matrix is actually a tree, at least the directed graph is acyclic
        
         if(cost < best_ans):
@@ -338,12 +338,12 @@ if(abs(target_cost - cost) == 0):
 else:
     wandb.log({"success":False, "Error" : abs(sankoff_cost - best_ans)})
 
-best_tree = show_graph_with_labels(best_tree, n_leaves, True)
+best_tree_img = show_graph_with_labels(best_tree, n_leaves, True)
 best_tree_adj = px.imshow(best_tree, text_auto=True)
 
 wandb.log({
         "best cost":best_ans, 
         "best_tree_adj" : wandb.data_types.Plotly(best_tree_adj),
-        "best_tree" : wandb.Image(best_tree),
+        "best_tree" : wandb.Image(best_tree_img),
         "best_seq" : wandb.data_types.Plotly(px.imshow(jnp.argmax(best_seq, axis = 2), text_auto=True))
            })
