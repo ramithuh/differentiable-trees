@@ -336,7 +336,7 @@ if(abs(target_cost - cost) == 0):
     print_success_info("Optimization succeeded! Reached groundtruth 🚀\n")
     wandb.log({"success":True, "Error" : 0})
 else:
-    wandb.log({"success":False, "Error" : (sankoff_cost - best_ans)})
+    wandb.log({"success":False, "Error" : (best_ans - sankoff_cost)})
 
 best_tree_img = show_graph_with_labels(best_tree, n_leaves, True)
 best_tree_adj = px.imshow(best_tree, text_auto=True)
