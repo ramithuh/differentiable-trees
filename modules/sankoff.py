@@ -7,6 +7,9 @@ from typing import Dict, List
 from jaxtyping import Array, Float
 from functools import partial
 
+from ott.tools import soft_sort
+softranks = jax.jit(soft_sort.ranks)
+
 # @partial(jax.jit, static_argnums=[5,6]) 
 def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_letters, verbose = False):
     '''
@@ -87,23 +90,34 @@ def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters,
 
 
     for node in range(n_leaves, n_all): ## loop all the ancestors in order
-        ind = jnp.argpartition(adj[:,node], -1)[-2:] ## find the children of the current node
+        #ind = jnp.argpartition(adj[:,node], -1)[-2:] ## find the children of the current node
+        
+        weights = jax.nn.softmax(softranks(adj[:,node])/epsilon)*2
+        sel  = jnp.eye(n_all,n_all)*weights
+        mask = jnp.matmul(sel, jnp.ones((n_all,dp.shape[1])))
 
-        left_node  = ind[0]
-        right_node = ind[1]
+        # left_node  = ind[0]
+        # right_node = ind[1]
 
         if(verbose):
             print(f"at node {node+1} children are : {left_node+1} and {right_node+1}")
 
         #for i in range(n_letters): # consider all the possible letters
+        
+        dp_sel = jnp.matmul(sel,dp)
+        node_mix = cost_mat[::,::] + dp_sel[::, None]
+        
+        ans = node_mix * mask[::, None]
+        ans = -nn.logsumexp(-ans/epsilon, axis = 2)*epsilon
+        ans = jnp.sum(ans, axis = 0)
             
-        left_cost_array = cost_mat[::][::] + dp[left_node][::]
-        left_cost = -nn.logsumexp(-left_cost_array/epsilon, axis = 1)*epsilon #jnp.min(left_cost_array, axis = 1) #
+        #left_cost_array = cost_mat[::][::] + dp[left_node][::]
+        #left_cost = -nn.logsumexp(-left_cost_array/epsilon, axis = 1)*epsilon #jnp.min(left_cost_array, axis = 1) #
 
-        right_cost_array = cost_mat[::][::] + dp[right_node][::]
-        right_cost = -nn.logsumexp(-right_cost_array/epsilon, axis = 1)*epsilon #jnp.min(right_cost_array, axis = 1) #
+        #right_cost_array = cost_mat[::][::] + dp[right_node][::]
+        #right_cost = -nn.logsumexp(-right_cost_array/epsilon, axis = 1)*epsilon #jnp.min(right_cost_array, axis = 1) #
 
-        dp = dp.at[node,::].set(left_cost + right_cost)
+        dp = dp.at[node,::].set(ans)
 
     return dp
 

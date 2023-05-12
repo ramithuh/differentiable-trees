@@ -52,10 +52,17 @@ def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes
     '''
 
     n_leaves = (base_tree.shape[1] - params['t'].shape[1])
-    
+        
     t_softmax = nn.softmax(params['t'],axis=1)
 
     t = base_tree.at[0:-1,n_leaves:].set(t_softmax)
+    b = jnp.ones((base_tree.shape[0], base_tree.shape[0]))
+    erase_diag = b - jnp.eye(base_tree.shape[0])
+    
+    t = t.at[:,:].set(jnp.triu(t*erase_diag)) ## enforce upper triangularity
+    
+
+    
     t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself. i.e. root) 
     
     return t
@@ -377,7 +384,7 @@ def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes l
     recurse_cost = _h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
     
     cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters'])
-    _, cost_surrogate_sankoff = run_diff_sankoff(t_, cost_mat, seqs, metadata, epsilon = 1e-5)
+    _, cost_surrogate_sankoff = run_diff_sankoff(t_, cost_mat, jnp.argmax(seqs, axis = 2), metadata, epsilon = 5e-1)
     
    
 
@@ -386,7 +393,7 @@ def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes l
     loss = cost_surrogate_sankoff + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost)
 
     if(verbose):
-        _, cost = run_sankoff(discretize_tree_topology(t_, n_all), cost_mat, seqs, metadata, return_path = False)
+        _, cost = run_sankoff(discretize_tree_topology(t_, n_all), cost_mat, jnp.argmax(seqs, axis = 2), metadata, return_path = False)
         #compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
         return cost, cost_surrogate_sankoff, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss
 
