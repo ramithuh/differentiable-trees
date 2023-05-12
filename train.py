@@ -68,7 +68,7 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': args['learning_rate'],
-    'lr_seq' : args['learning_rate']*10,
+    'lr_seq' : args['learning_rate_seq'] if args['learning_rate_seq']!=None else args['learning_rate']*10,
     'epochs': args['epochs'],
     'tLs': args['tree_loss_schedule'] #tree loss schedule
     }
@@ -269,8 +269,8 @@ for _ in range(metadata['epochs']):
     ## Compute the loss and the metrics for loggings purposes
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
-    grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0])
-    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, acyclic_cost_soft, acyclic_cost, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], verbose = True)
+    grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0], _)
+    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, acyclic_cost_soft, acyclic_cost, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], epoch = _, verbose = True)
 
         
     if(acyclic_cost <= 0):
