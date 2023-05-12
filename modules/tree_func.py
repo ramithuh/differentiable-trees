@@ -35,7 +35,7 @@ def discretize_tree_topology(tree : Float[Array, "nodes nodes"], n_nodes : int) 
     return t_q
 
 @jit
-def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes"]) -> Float[Array, "nodes nodes"]:
+def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes"], epoch : int = 0 ) -> Float[Array, "nodes nodes"]:
     '''
         Uses base_tree and returns the updated soft tree topology
         Particularly updates the ancestor probabilities in the trees
@@ -52,6 +52,7 @@ def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes
     '''
 
     n_leaves = (base_tree.shape[1] - params['t'].shape[1])
+    key = jax.random.PRNGKey(epoch)
         
     # t_softmax = nn.softmax(,axis=1)
     t = base_tree.at[0:-1,n_leaves:].set(params['t']) # set the params['t'] to the ancestors
@@ -60,7 +61,14 @@ def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes
     #custom softmax over the topologically ordered ancestors
     for i in range(0, t.shape[0]-1): ## loop until last node (excluding root)
         pos = max(i+1, n_leaves)
-        prob = nn.softmax(t[i, pos:]) ## softmax over the topologically ordered ancestors 
+        
+        gumbel_noise = 0 #jax.random.gumbel(key, (t.shape[1]-pos,)) 
+        #key, _ = jax.random.split(key)
+        noisy_t = t[i, pos:] + gumbel_noise
+
+        ## softmax over the topologically ordered ancestors 
+        prob = jax.nn.softmax(noisy_t) # nn.softmax(t[i, pos:])
+
         t = t.at[i, pos:].set(prob)
     
     t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself. i.e. root) 
@@ -314,7 +322,7 @@ def _h_det(W, s=1.01):
     
     return h
 
-def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
+def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, epoch : int = 0, verbose = False) -> Float:
     """Computes the total loss for a given set of sequences and a tree
 
     Args:
@@ -339,7 +347,7 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
     if(metadata['args']['fix_tree']):
         t_ = base_tree
     else:   
-        t_ = update_tree(params, base_tree)
+        t_ = update_tree(params, base_tree, epoch)
     
     
     acyclic_cost_soft = _h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
@@ -381,7 +389,7 @@ def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes l
     else:   
         t_ = update_tree(params, base_tree)
     
-    recurse_cost = _h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
+    recurse_cost = 0 #_h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
     
     cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters'])
     _, cost_surrogate_sankoff = run_diff_sankoff(t_, cost_mat, jnp.argmax(seqs, axis = 2), metadata, epsilon = 5e-1)
@@ -390,7 +398,7 @@ def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes l
 
     tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
     
-    loss = cost_surrogate_sankoff + temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost)
+    loss = cost_surrogate_sankoff #+ temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost)
 
     if(verbose):
         _, cost = run_sankoff(discretize_tree_topology(t_, n_all), cost_mat, jnp.argmax(seqs, axis = 2), metadata, return_path = False)
