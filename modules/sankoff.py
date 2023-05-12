@@ -10,6 +10,10 @@ from functools import partial
 from ott.tools import soft_sort
 softranks = jax.jit(soft_sort.ranks)
 
+def softmin(x, epsilon = 1, axis = 0):
+    c = jnp.max(-x*epsilon, axis = axis, keepdims=True)
+    return -(jnp.log(jnp.mean(jnp.exp(-x*epsilon - c), axis = axis, keepdims = True ) + 1e-6) + c/epsilon)[...,-1]
+
 # @partial(jax.jit, static_argnums=[5,6]) 
 def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_letters, verbose = False):
     '''
@@ -108,7 +112,7 @@ def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters,
         node_mix = cost_mat[::,::] + dp_sel[::, None]
         
         ans = node_mix * mask[::, None]
-        ans = -nn.logsumexp(-ans/epsilon, axis = 2)*epsilon
+        ans = softmin(ans, epsilon, axis = 2) #-nn.logsumexp(-ans/epsilon, axis = 2)*epsilon
         ans = jnp.sum(ans, axis = 0)
             
         #left_cost_array = cost_mat[::][::] + dp[left_node][::]
@@ -160,7 +164,7 @@ def run_diff_sankoff(adj, cost_mat, seq, metadata, epsilon = 1e-5):
     n_leaves  = metadata['n_leaves']
     
     ##empty dp table
-    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters))*1e7
+    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters))*1e2
     
     # connections = dp_nodes.copy()
         
@@ -176,7 +180,7 @@ def run_sankoff(adj, cost_mat, seq, metadata, return_path = True):
     
     ##empty dp tables
     dp_nodes = jnp.zeros((seq.shape[1], metadata['n_all'], n_letters, 4))
-    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters))*1e7
+    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters))*1e2
     
     # connections = dp_nodes.copy()
         
