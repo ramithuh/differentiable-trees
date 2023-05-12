@@ -68,7 +68,7 @@ metadata = {
     'seed' : int(args['seed']) if args['seed']!=None else 42,
     'seq_temp': 0.5,
     'lr': args['learning_rate'],
-    'lr_seq' : 0.01 if args['learning_rate_seq']==None else args['learning_rate']*10,
+    'lr_seq' : args['learning_rate']*10,
     'epochs': args['epochs'],
     'tLs': args['tree_loss_schedule'] #tree loss schedule
     }
