@@ -52,10 +52,17 @@ def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes
     '''
 
     n_leaves = (base_tree.shape[1] - params['t'].shape[1])
-    
+        
     t_softmax = nn.softmax(params['t'],axis=1)
 
     t = base_tree.at[0:-1,n_leaves:].set(t_softmax)
+    b = jnp.ones((base_tree.shape[0], base_tree.shape[0]))
+    erase_diag = b - jnp.eye(base_tree.shape[0])
+    
+    t = t.at[:,:].set(jnp.triu(t*erase_diag)) ## enforce upper triangularity
+    
+
+    
     t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself. i.e. root) 
     
     return t
