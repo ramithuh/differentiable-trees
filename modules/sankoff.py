@@ -40,33 +40,32 @@ def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_let
 
 
     for node in range(n_leaves, n_all): ## loop all the ancestors in order
-        ind = jnp.argpartition(adj[:,node], -1)[-2:] ## find the children of the current node
-
-        left_node  = ind[0]
-        right_node = ind[1]
+        children = jnp.where(adj[:,node] == 1)[0] ## find the children of the current node
 
         if(verbose):
-            print(f"at node {node+1} children are : {left_node+1} and {right_node+1}")
+            print(f"at node {node+1} children are : {children}")
 
         #for i in range(n_letters): # consider all the possible letters
+        total_cost = 0
+        nodes = []
+        for child in children:
+            cur_node = int(child)
             
-        left_cost_array = cost_mat[::][::] + dp[left_node][::]
-        left_cost = jnp.min(left_cost_array, axis = 1)
-        left_char = jnp.argmin(left_cost_array, axis = 1)
+            cost_array = cost_mat[::][::] + dp[cur_node][::]
+            cost = jnp.min(cost_array, axis = 1)
+            char = jnp.argmin(cost_array, axis = 1)
+            
+            nodes.append([cur_node, char])
+            total_cost += cost
+            
+        dp = dp.at[node,::].set(total_cost)
 
-        right_cost_array = cost_mat[::][::] + dp[right_node][::]
-        right_cost = jnp.min(right_cost_array, axis = 1)
-        right_char = jnp.argmin(right_cost_array, axis = 1)
+        #below parts should be generalized for trees other than bifurcating ones
+        # dp_nodes = dp_nodes.at[node, ::, 0].set(nodes[0][0])
+        # dp_nodes = dp_nodes.at[node, ::, 1].set(nodes[0][1])
 
-        dp = dp.at[node,::].set(left_cost + right_cost)
-
-        dp_nodes = dp_nodes.at[node, ::, 0].set(left_node)
-        dp_nodes = dp_nodes.at[node, ::, 1].set(left_char)
-
-        dp_nodes = dp_nodes.at[node, ::, 2].set(right_node)
-        dp_nodes = dp_nodes.at[node, ::, 3].set(right_char)
-
-            # dp_nodes[...,node][i] = {str(left_node) : left_char, str(right_node) : right_char}
+        # dp_nodes = dp_nodes.at[node, ::, 2].set(nodes[1][0])
+        # dp_nodes = dp_nodes.at[node, ::, 3].set(nodes[1][1])
 
     return dp, dp_nodes
 
@@ -172,7 +171,7 @@ def run_diff_sankoff(adj, cost_mat, seq, metadata, epsilon = 1e-5):
 
     return dp, dp[:, -1].min(axis = 1).sum()
 
-def run_sankoff(adj, cost_mat, seq, metadata, return_path = True):
+def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
     adj = adj.at[-1,-1].set(0) ##manually remove self connection (convention used in the train script)
     
     n_letters = metadata['n_letters']
