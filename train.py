@@ -125,7 +125,7 @@ if(args['groundtruth']):
         cost_mat = jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)
         
         print("running sankoff on groundtruth tree")
-        sankoff_seqs, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
+        sankoff_seqs, _, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
         print("done running sankoff on groundtruth tree")
         
         wandb.log(
@@ -270,7 +270,7 @@ for _ in range(metadata['epochs']):
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
     grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0], _)
-    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, acyclic_cost_soft, acyclic_cost, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], epoch = _, verbose = True)
+    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, acyclic_cost_soft, acyclic_cost, sankoff_soft_cost, sankoff_cost, soft_dp_table, dp_table, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], epoch = _, verbose = True)
 
         
     if(acyclic_cost <= 0):
@@ -293,8 +293,17 @@ for _ in range(metadata['epochs']):
             "traversal cost (surrogate)": cost_surrogate,
             "tree force loss": tree_force_loss,
             "loop loss": loop_loss,
+            
             "acyclic soft loss": acyclic_cost_soft,
             "acyclic loss" : acyclic_cost,
+            
+            "sankoff soft loss_": sankoff_soft_cost,
+            "sankoff loss_" : sankoff_cost,
+            
+            "soft dp table" : wandb.data_types.Plotly(px.imshow(soft_dp_table[91], text_auto=True)),
+            "dp table" : wandb.data_types.Plotly(px.imshow(dp_table[91], text_auto=True)),
+            
+            
             "bidirection loss": bidirection_loss,
 
             "tree":wandb.Image(tree_at_epoch),
