@@ -8,11 +8,12 @@ from jaxtyping import Array, Float
 from functools import partial
 
 from ott.tools import soft_sort
-softranks = jax.jit(soft_sort.ranks)
+# softranks = soft_sort.ranks#jax.jit(soft_sort.ranks)
+softranks = jax.jit(soft_sort.ranks, static_argnums=(2)) 
 
 def softmin(x, epsilon = 1, axis = 0):
     c = jnp.max(-x*epsilon, axis = axis, keepdims=True)
-    return -(jnp.log(jnp.mean(jnp.exp(-x*epsilon - c), axis = axis, keepdims = True ) + 1e-6) + c/epsilon)[...,-1]
+    return -(jnp.log(jnp.mean(jnp.exp(-x*epsilon - c), axis = axis, keepdims = True ) - 1e-6) + c/epsilon)[...,-1]
 
 # @partial(jax.jit, static_argnums=[5,6]) 
 def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_letters, verbose = False):
@@ -69,7 +70,7 @@ def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_let
 
     return dp, dp_nodes
 
-def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters, epsilon = 1e-5, verbose = False):
+def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters, epsilon = 1e-5, verbose = True):
     '''
         Run sankoff algorithm given the tree topology and the leaf sequences
         
@@ -93,32 +94,26 @@ def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters,
 
 
     for node in range(n_leaves, n_all): ## loop all the ancestors in order
-        #ind = jnp.argpartition(adj[:,node], -1)[-2:] ## find the children of the current node
         
-        weights = jax.nn.softmax(softranks(adj[:,node])/epsilon)*2
-        sel  = jnp.eye(n_all,n_all)*weights
-        mask = jnp.matmul(sel, jnp.ones((n_all,dp.shape[1])))
-
-        # left_node  = ind[0]
-        # right_node = ind[1]
+        ## consider topologically feasible candidates (slicing -> :node)
+        prob_children    = jax.nn.softmax(adj[:,node][:node]/(epsilon))*2 #softranks(adj[:,node][:node], epsilon = epsilon)/epsilon)*2 
+        children_onehot  = jnp.eye(node,node)*prob_children
+        
+        #print(prob_children)
+        
+        mask = jnp.matmul(children_onehot, jnp.ones((node,dp.shape[1]))) #mask to supress rows from the dp table
 
         if(verbose):
-            print(f"at node {node+1} children are : {left_node+1} and {right_node+1}")
-
-        #for i in range(n_letters): # consider all the possible letters
+            print(f"at node {node+1} children are : {adj[:,node][:node]}")
+            print(f" probable children are -> {prob_children}")
+            print("_____")
         
-        dp_sel = jnp.matmul(sel,dp)
+        dp_sel = jnp.matmul(children_onehot,dp[:node]) ##lookup dp table's first node-1 rows (topologically feasible candidates)
         node_mix = cost_mat[::,::] + dp_sel[::, None]
         
         ans = node_mix * mask[::, None]
         ans = softmin(ans, epsilon, axis = 2) #-nn.logsumexp(-ans/epsilon, axis = 2)*epsilon
         ans = jnp.sum(ans, axis = 0)
-            
-        #left_cost_array = cost_mat[::][::] + dp[left_node][::]
-        #left_cost = -nn.logsumexp(-left_cost_array/epsilon, axis = 1)*epsilon #jnp.min(left_cost_array, axis = 1) #
-
-        #right_cost_array = cost_mat[::][::] + dp[right_node][::]
-        #right_cost = -nn.logsumexp(-right_cost_array/epsilon, axis = 1)*epsilon #jnp.min(right_cost_array, axis = 1) #
 
         dp = dp.at[node,::].set(ans)
 
@@ -163,13 +158,13 @@ def run_diff_sankoff(adj, cost_mat, seq, metadata, epsilon = 1e-5):
     n_leaves  = metadata['n_leaves']
     
     ##empty dp table
-    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters))*1e2
+    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters))*10
     
     # connections = dp_nodes.copy()
         
     dp = vectorized_diff_dp(adj, dp, seq, cost_mat, n_letters, epsilon, False)
 
-    return dp, dp[:, -1].min(axis = 1).sum()
+    return dp, softmin(dp[:, -1], epsilon, axis = 1).sum() #dp[:, -1].min(axis = 1).sum()
 
 def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
     adj = adj.at[-1,-1].set(0) ##manually remove self connection (convention used in the train script)
@@ -212,4 +207,4 @@ def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
                 # print(".", end = "")
 
     
-    return found_seq, dp[:, -1].min(axis = 1).sum()#, dp
+    return found_seq, dp, dp[:, -1].min(axis = 1).sum()#, dp

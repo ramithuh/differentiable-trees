@@ -125,7 +125,7 @@ if(args['groundtruth']):
         cost_mat = jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)
         
         print("running sankoff on groundtruth tree")
-        sankoff_seqs, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
+        sankoff_seqs, _, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
         print("done running sankoff on groundtruth tree")
         
         wandb.log(
@@ -216,7 +216,7 @@ print(tree_mask.keys())
 
 opt_state = optimizer.init(params)
 
-fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params, base_tree), n_all),n_leaves, True)
+fig2 = show_graph_with_labels(discretize_tree_topology(update_tree_sankoff(params, base_tree), n_all),n_leaves, True)
 
 
 
@@ -249,7 +249,7 @@ for _ in range(metadata['epochs']):
         if(args['fix_tree']): 
             t_ = base_tree
         else:
-            t_ = update_tree(params, base_tree)
+            t_ = update_tree_sankoff(params, base_tree)
         t_d           = discretize_tree_topology(t_,n_all)
         tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, True)
         tree_matrix_at_epoch = px.imshow(t_, text_auto=True)
