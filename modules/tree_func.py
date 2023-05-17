@@ -225,7 +225,7 @@ def compute_cost(sequences : Float[Array, "nodes seq_length letters"], tree : Fl
         selection_ = jnp.matmul(discretize_tree_topology(tree, tree.shape[0]), jnp.argmax(sequences, axis = 2))
         sequences_ = jnp.argmax(sequences, axis = 2)
     
-        sm  = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters'])
+        sm  = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.bfloat16)
         
         ans = sm[jnp.round(selection_).astype(jnp.int32),jnp.round(sequences_).astype(jnp.int32)].sum()
 
@@ -386,7 +386,7 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
         cost         = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
         acyclic_cost = 0 #_h_det(discretize_tree_topology(t_, n_all))*100
         
-        cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters'])
+        cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters']).astype(jnp.bfloat16)
         _, dp_table, sankoff_cost = run_sankoff(discretize_tree_topology(t_, n_all), cost_mat, jnp.argmax(seqs, axis = 2), metadata)
         soft_dp_table, sankoff_soft_cost = run_diff_sankoff(t_, cost_mat, jnp.argmax(seqs, axis = 2), metadata, epsilon = 0.145e-3)
         
@@ -419,7 +419,7 @@ def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes l
     
     recurse_cost = 0 #_h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
     
-    cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters'])
+    cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters']).astype(jnp.bfloat16)
     _, cost_surrogate_sankoff = run_diff_sankoff(t_, cost_mat, jnp.argmax(seqs, axis = 2), metadata, epsilon = 0.145e-1)#/(1+temp))
     
    

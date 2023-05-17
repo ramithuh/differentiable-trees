@@ -122,7 +122,7 @@ if(args['groundtruth']):
     if(not(args['fix_seqs'])):
         ## since we know the gt tree, let's get the real ancestors using sankoff algorithm! 🎉 
         ## This will help us to see whether there's a better groundtruth ancestors for this tree
-        cost_mat = jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)
+        cost_mat = (jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)).astype(jnp.bfloat16)
         
         print("running sankoff on groundtruth tree")
         sankoff_seqs, _, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
@@ -165,7 +165,7 @@ if(args['groundtruth']):
 
 #### Define parameters (t and the ancestor sequences)
 params : Dict[str, Array] = {
-    't': jax.random.normal(key, (n_all - 1,n_ancestors))
+    't': jax.random.normal(key, (n_all - 1,n_ancestors)).astype(jnp.bfloat16)
     }
 
 
@@ -315,7 +315,7 @@ for _ in range(metadata['epochs']):
     if(_%100==0):
         print_bold_info(f"epoch {_}")
         print("{:.3f}".format(metadata['tLs'][0]), end = " ")
-        print("{:.3f}".format(loss,end = " \n"))
+        print("{:.3f}".format(loss.item(), end=" \n"))
     
     
     #=> Update the parameters
@@ -331,7 +331,7 @@ print_success_info("Final cost: {:.5f}\n".format(cost))
 print_success_info("Best cost encountered: {:.5f}\n".format(best_ans))
 
 if(args['fix_tree']):
-    print_success_info("Sankoff cost for groundtruth tree: {:.5f}\n".format(sankoff_cost))
+    print_success_info("Sankoff cost for groundtruth tree: {:.5f}\n".format(sankoff_cost.item()))
     target_cost = sankoff_cost
 elif(args['fix_seqs']):
     print_success_info("Groundtruth tree cost: {:.5f}\n".format(gt_cost))
