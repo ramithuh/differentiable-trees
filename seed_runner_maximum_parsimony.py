@@ -27,12 +27,12 @@ base = base + ["-g", "0"]
 for l in leaves:
     cmd = base + ["-l", str(l)]
     
-    if(l < 32):
-        cmd = cmd + ["-e", "2000"]
-    elif(l < 128):
+    if(l < 16):
         cmd = cmd + ["-e", "5000"]
+    elif(l < 128):
+        cmd = cmd + ["-e", "10000"]
     else:
-        cmd = cmd + ["-e", "7000"]
+        cmd = cmd + ["-e", "20000"]
     
     print(f"Running for {l} leaves")
     
