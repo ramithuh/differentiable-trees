@@ -202,20 +202,20 @@ def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
     #     connections = connections.at[i].set(ans[1])
         
     
-    seq_chars = jnp.zeros((seq.shape[1], metadata['n_all'],1)).astype(jnp.bfloat16)
-    found_seq = seq.copy().astype(jnp.float32)
+    # seq_chars = jnp.zeros((seq.shape[1], metadata['n_all'],1)).astype(jnp.bfloat16)
+    # found_seq = seq.copy().astype(jnp.float32)
     
-    if(return_path):
-        node = adj.shape[0] - 1
+    # if(return_path):
+    #     node = adj.shape[0] - 1
 
-        if(seq.shape[0] <=  1024): # if too many sequences don't backtrack and find best ancestors, cost is enough
-            for i in range(0,seq.shape[1]):
-                letter = jnp.argmin(dp[i,node,:]).astype(int)
+    #     if(seq.shape[0] <=  1024): # if too many sequences don't backtrack and find best ancestors, cost is enough
+    #         for i in range(0,seq.shape[1]):
+    #             letter = jnp.argmin(dp[i,node,:]).astype(int)
 
-                chars = backtrack_dp(node, letter, seq_chars[i], connections[i], n_leaves).reshape(metadata['n_all'],)
+    #             chars = backtrack_dp(node, letter, seq_chars[i], connections[i], n_leaves).reshape(metadata['n_all'],)
                 
-                found_seq = found_seq.at[metadata['n_leaves']:,i].set(chars[metadata['n_leaves']:])
-                # print(".", end = "")
+    #             found_seq = found_seq.at[metadata['n_leaves']:,i].set(chars[metadata['n_leaves']:])
+    #             # print(".", end = "")
 
     
-    return found_seq, dp, dp[:, -1].min(axis = 1).sum()#, dp
+    return 0, dp, dp[:, -1].min(axis = 1).sum()

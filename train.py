@@ -125,14 +125,14 @@ if(args['groundtruth']):
         cost_mat = (jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)).astype(jnp.bfloat16)
         
         print("running sankoff on groundtruth tree")
-        sankoff_seqs, _, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
+        _, _, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
         print("done running sankoff on groundtruth tree")
         
         wandb.log(
             {
-                'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
+                #'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
                 'sankoff_cost': sankoff_cost,
-                'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.bfloat16), tree, metadata, surrogate_loss = False)
+                #'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.bfloat16), tree, metadata, surrogate_loss = False)
             })
         
     if(args['shuffle_seqs']):        
@@ -145,21 +145,21 @@ if(args['groundtruth']):
     gt_tree = show_graph_with_labels(tree, n_leaves, True)
     gt_seqs_plot = px.imshow(jnp.argmax(gt_seqs, axis = 2), text_auto=True)
 
-    gt_cost           = compute_cost(gt_seqs, tree, metadata, surrogate_loss = False)
-    gt_cost_surrogate = compute_cost(gt_seqs, tree, metadata)
     
-    gt_tree_force_loss, gt_loop_loss, gt_bidirection_loss = enforce_graph(tree, 10, metadata)
+    sm   = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.bfloat16)
+    gt_cost           = compute_cost(gt_seqs, tree, sm)
+    gt_cost_surrogate = compute_surrogate_cost(gt_seqs, tree)
+    
+    gt_tree_force_loss = enforce_graph(tree, 10, metadata)
 
     wandb.log({
         "Groundtruth Tree" : wandb.Image(gt_tree),
         "Groundtruth Seq" : wandb.data_types.Plotly(gt_seqs_plot),
 
         "Groundtruth Tree Force Loss" : gt_tree_force_loss,
-        "Groundtruth Loop Loss" : gt_loop_loss,
-        "Groundtruth Bidirection Loss" : gt_bidirection_loss,
         "Groundtruth Traversal Cost (surrogate)" : gt_cost_surrogate,
         "Groundtruth Traversal Cost" : gt_cost,
-        "Groundtruth Total Loss" : gt_tree_force_loss + gt_loop_loss + gt_bidirection_loss + gt_cost
+        "Groundtruth Total Loss" : gt_tree_force_loss + gt_cost
         })
 
 
@@ -270,18 +270,14 @@ for _ in range(metadata['epochs']):
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
     grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0], _)
-    cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, acyclic_cost_soft, acyclic_cost, sankoff_soft_cost, sankoff_cost, soft_dp_table, dp_table, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], epoch = _, verbose = True)
+    cost, cost_surrogate, tree_force_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], epoch = _, verbose = True)
 
-        
-    if(acyclic_cost <= 0):
-        ## adjacency matrix is actually a tree, at least the directed graph is acyclic
-       
-        if(cost < best_ans):
-            print_success_info("Found a better tree at epoch %d with cost %f \n" % (_, cost))
-            best_ans = cost
-            t_ = update_tree(params, base_tree)
-            best_tree = discretize_tree_topology(t_,n_all)
-            best_seq = update_seq(params, seqs, metadata['seq_temp'])
+    if(cost < best_ans):
+        print_success_info("Found a better tree at epoch %d with cost %f \n" % (_, cost))
+        best_ans = cost
+        t_ = update_tree(params, base_tree)
+        best_tree = discretize_tree_topology(t_,n_all)
+        best_seq = update_seq(params, seqs, metadata['seq_temp'])
         
     ## Log the metrics
     if(_%100==0):
@@ -292,20 +288,7 @@ for _ in range(metadata['epochs']):
             "traversal cost": cost,
             "traversal cost (surrogate)": cost_surrogate,
             "tree force loss": tree_force_loss,
-            "loop loss": loop_loss,
             
-            "acyclic soft loss": acyclic_cost_soft,
-            "acyclic loss" : acyclic_cost,
-            
-            "sankoff soft loss_": sankoff_soft_cost,
-            "sankoff loss_" : sankoff_cost,
-            
-            "soft dp table" : wandb.data_types.Plotly(px.imshow(soft_dp_table[91], text_auto=True)),
-            "dp table" : wandb.data_types.Plotly(px.imshow(dp_table[91], text_auto=True)),
-            
-            
-            "bidirection loss": bidirection_loss,
-
             "tree":wandb.Image(tree_at_epoch),
             "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
             "Seq":wandb.data_types.Plotly(new_seq),

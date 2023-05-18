@@ -2,9 +2,9 @@ import subprocess
 import os
 import math
         
-# print("Which GPU do you want to restrict to?")
-# id = input()
-# os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
+print("Which GPU do you want to restrict to?")
+id = input()
+os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
 
 # Define the list of seeds you want to use
 seeds = [x+42 for x in range(10)]
@@ -21,7 +21,7 @@ print("ok will run for the following leaf complexities:")
 print(leaves)
 
 # Common command and arguments
-base = ["python", "train.py", "-nl", "20", "-m", "50", "-sl", "256", "-tLs", "[0,0.005,10,50]", "-lr", "0.1","-lr_seq", "0.1","-t", "learning_both", "-p","Batch-Run-Maximum-Parsimony-A100-triu", "-alt", "-ai", "10", "-n", "Batch Run"]
+base = ["python", "train.py", "-nl", "20", "-m", "50", "-sl", "256", "-tLs", "[0,0.005,10,50]", "-lr", "0.1","-lr_seq", "0.1","-t", "learning_both", "-p","Batch-Run-Maximum-Parsimony-A100-triu-optimized", "-alt", "-ai", "10", "-n", "Batch Run"]
 base = base + ["-g", "0"]
 
 for l in leaves:
