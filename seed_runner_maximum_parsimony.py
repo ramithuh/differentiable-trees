@@ -7,7 +7,7 @@ id = input()
 os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
 
 # Define the list of seeds you want to use
-seeds = [x+42 for x in range(10)]
+seeds = [x+42 for x in range(10)][::-1]
 
 # Define the leaf complexity you want to use
 print("which leaf complexity do you want to use?")
@@ -30,9 +30,9 @@ for l in leaves:
     if(l < 16):
         cmd = cmd + ["-e", "5000"]
     elif(l < 128):
-        cmd = cmd + ["-e", "10000"]
+        cmd = cmd + ["-e", "15000"]
     else:
-        cmd = cmd + ["-e", "20000"]
+        cmd = cmd + ["-e", "25000"]
     
     print(f"Running for {l} leaves")
     
