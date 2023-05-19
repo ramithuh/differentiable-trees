@@ -69,6 +69,22 @@ def parse_args_v2():
 
     return parser.parse_args()
 
+def parse_args_simple():
+    #### Parse arguments
+    parser = argparse.ArgumentParser(description='Get statistics of the generated random tree. \n sample usage :  python gt_stats.py -l 8 -m 10 -sl 50')
+
+    #tree and seq generate parameters
+    parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=True, type = int)
+    parser.add_argument('-m','--mutations'   , help='# of muations?'  , required=False, type = int)
+    parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False, type = int)
+    parser.add_argument('-nl','--letters'    , help='# of letters?'    , required=False, type = int)
+    parser.add_argument('-s','--seed'        , help='seed'            , required=False, type = int)
+    
+    parser.add_argument('-shs', '--shuffle_seqs', action='store_true', help='Shuffle groundtruth sequences?')
+    parser.set_defaults(shuffle_seqs=False)
+
+    return parser.parse_args()
+
 def sanity_check(args_):
     ### set contradictory arguments (otherwise could be confusing in wandb)
     args = args_.copy()
