@@ -34,17 +34,31 @@ from modules.gt_tree_gen import *
 from modules.sankoff import *
 from arg_parser_v2 import *
 
-def invert_dict(dictionary):
-  new_dict = dictionary
-  for key in dictionary.keys():
-      
-    if('fixed' in new_dict[key]):
-        new_dict[key] = 'learn' + new_dict[key][5:]
-    elif('learn' in new_dict[key]):
-        new_dict[key] = 'fixed' + new_dict[key][5:]
-    else:
-        raise ValueError(f"Unknown value in {key} -> {new_dict[key]}")
-  return new_dict
+def combine_params(tree_params, seq_params):
+    params = {}
+    params.update(tree_params)
+    params.update(seq_params)
+    return params
+
+def outer_objective(tree_params, seq_params, data):
+    seqs, base_tree, metadata, temp = data
+    
+    common_dict = {}
+    
+    common_dict.update(tree_params)
+    common_dict.update(seq_params)
+    
+    return compute_loss(common_dict, seqs, base_tree, metadata, temp)
+
+def inner_objective(seq_params, tree_params, data):
+    seqs, base_tree, metadata, temp = data
+    
+    common_dict = {}
+    
+    common_dict.update(tree_params)
+    common_dict.update(seq_params)
+    
+    return compute_loss(common_dict, seqs, base_tree, metadata, temp)
 
 ## Parse Command Line Arguments and perform checks
 args = vars(parse_args_v2())
@@ -168,22 +182,17 @@ if(args['groundtruth']):
 
 
 #### Define parameters (t and the ancestor sequences)
-params : Dict[str, Array] = {
+tree_params : Dict[str, Array] = {
     't': jax.random.normal(key, (n_all - 1,n_ancestors)).astype(jnp.bfloat16)
     }
 
+seq_params : Dict[str, Array] = {}
 
-tree_mask = {}
-
-if(args['fix_tree']):
-    tree_mask['t'] = 'fixed_tree'
-else:
-    tree_mask['t'] = 'learn_tree'
 
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
     print_critical_info("Initializing tree using groundtruth tree \n")
-    params['t'] = tree[0:-1,n_leaves:]*10
+    tree_params['t'] = tree[0:-1,n_leaves:]*10
     
 #### Add the ancestor sequences to the parameters
 for i in range(0, n_ancestors):
@@ -193,36 +202,23 @@ for i in range(0, n_ancestors):
             raise NotImplementedError("Sankoff backtracking not implemented for n_leaves > 1024 due to execution time")
         else:
             print_critical_info("Initializing sequences using sankoff ancestors \n")
-            params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.bfloat16)*100
+            seq_params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.bfloat16)*100
     else:
-        params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
-
-    if(args['alternate_optimization'] or args['fix_seqs']):
-        tree_mask[str(i)]  = 'fixed_seq'
-    else:
-        tree_mask[str(i)]  = 'learn_seq'
+        seq_params[str(i)] = jax.random.normal(key+i, (seq_length, n_letters)).astype(jnp.bfloat16)
     
 #### Initialize the optimizer
-# optimizer = optax.adam(metadata['lr'])
-# optimizer = optax.multi_transform(
-#                     {
-#                      'learn_tree': optax.adam(metadata['lr']), 
-#                      'learn_seq':  optax.adam(metadata['lr_seq']), 
-#                      'fixed_tree': optax.set_to_zero(),
-#                      'fixed_seq' : optax.set_to_zero()
-#                      },
-#                     tree_mask
-#                     )
-# optimizer = jaxopt.GradientDescent(fun=compute_loss, verbose=True)
-opt = optax.adam(0.01)
-optimizer = OptaxSolver(opt=opt, fun=compute_loss)
+outer_optimizer = OptaxSolver(opt=optax.adam(0.1), fun=outer_objective)
+inner_optimizer = OptaxSolver(opt=optax.adam(0.1), fun=inner_objective, implicit_diff=True)
+
 
 print("parameters to optimize:", end = " -> ")
-print(params.keys())
-print(tree_mask.keys())
+print(seq_params.keys())
 
 # opt_state = optimizer.init(params)
-opt_state = optimizer.init_state(params, seqs, base_tree, metadata, metadata['tLs'][0])
+outer_opt_state = outer_optimizer.init_state(tree_params, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+inner_opt_state =  inner_optimizer.init_state(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+
+params = combine_params(tree_params, seq_params)
 
 fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params, base_tree), n_all),n_leaves, True)
 
@@ -238,24 +234,6 @@ best_tree = None
 
 #### Training loop
 for _ in range(metadata['epochs']):
-
-    # if(args['alternate_optimization']):
-    #     if(_ % args['alternate_interval'] == 0 and _>0):
-    #         #if we are in ALT mode switch the mask
-    #         tree_mask = invert_dict(tree_mask)
-    #         #print(" mask: ", tree_mask)
-
-    #         optimizer = optax.multi_transform(
-    #                 {
-    #                  'learn_tree': optax.adam(metadata['lr']), 
-    #                  'learn_seq':  optax.adam(metadata['lr_seq']), 
-    #                  'fixed_tree': optax.set_to_zero(),
-    #                  'fixed_seq' : optax.set_to_zero()
-    #                  },
-    #                 tree_mask
-    #                 )
-            
-    #         opt_state = optimizer.init(params)
 
     if(_%100==0):
         ###~ Get the current discretized tree
@@ -278,6 +256,7 @@ for _ in range(metadata['epochs']):
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
     # grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0], _)
+    params = combine_params(tree_params, seq_params)
     cost, cost_surrogate, tree_force_loss, loss = compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0], epoch = _, verbose = True)
 
     if(cost < best_ans):
@@ -310,7 +289,13 @@ for _ in range(metadata['epochs']):
     
     
     #=> Update the parameters
-    params, opt_state = optimizer.update(params, opt_state, seqs, base_tree, metadata, metadata['tLs'][0])
+    for i in range(0,10):
+        seq_params, inner_opt_state = inner_optimizer.update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+        #print(".", end = "")
+        
+    tree_params, outer_opt_state = outer_optimizer.update(tree_params, outer_opt_state, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+    
+    # params, opt_state = optimizer.update(params, opt_state, seqs, base_tree, metadata, metadata['tLs'][0])
 
     ### update the tree loss schedule
     if(_%metadata['tLs'][3]==0):
