@@ -265,6 +265,42 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
 
     return loss
 
+def compute_loss_optimized(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, epoch : int = 0, verbose = False) -> Float:
+    """Computes the total loss for a given set of sequences and a tree
+
+    Args:
+        params : contains the tree and seq trainable parameters
+        seqs   : sequences array. shape = (n_all, length, n_letters
+        base_tree : base tree with zeros
+        metadata (Dict) : contains the metadata
+        temp (Float) : temperature for the loss
+        verbose : returns individual loss item if True. Defaults to False.
+
+    Returns:
+        cost : total loss
+    """    
+    n_leaves = metadata['n_leaves']
+    n_all    = metadata['n_all']
+
+    seqs_ = update_seq(params, seqs, temp )
+    
+    t_ = update_tree(params, base_tree, epoch)
+    
+
+    cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
+
+    tree_force_loss = enforce_graph(t_,10,metadata)
+    
+    loss = cost_surrogate + temp*(tree_force_loss)
+
+    if(verbose):
+        sm   = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.bfloat16)
+        cost = compute_cost(seqs_,t_, sm) # real traversal cost
+
+        return cost, cost_surrogate, tree_force_loss, loss
+
+    return loss
+
 def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
     """Computes the total loss for a given set of sequences and a tree
 
