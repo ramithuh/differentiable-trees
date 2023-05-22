@@ -294,7 +294,7 @@ def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str
     loss = cost_surrogate + temp*(tree_force_loss)
 
     if(verbose):
-        sm   = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.bfloat16)
+        sm   = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.float32)
         cost = compute_cost(seqs_,t_, sm) # real traversal cost
 
         return cost, cost_surrogate, tree_force_loss, loss
@@ -327,7 +327,7 @@ def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes l
     
     recurse_cost = 0 #_h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
     
-    cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters']).astype(jnp.bfloat16)
+    cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters']).astype(jnp.float32)
     _, cost_surrogate_sankoff = run_diff_sankoff(t_, cost_mat, jnp.argmax(seqs, axis = 2), metadata, epsilon = (0.145e-1)/(1+temp))
     
    
