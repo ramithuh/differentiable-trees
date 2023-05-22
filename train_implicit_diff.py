@@ -203,8 +203,12 @@ for i in range(0, n_ancestors):
 
 # common_optimizer = OptaxSolver(opt = optax.adam(0.1), fun = compute_loss)
 outer_optimizer = OptaxSolver(opt = optax.adam(metadata['lr']), fun = outer_objective)
-inner_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq']), fun = inner_objective, implicit_diff = True)
-#outer_optimizer = jaxopt.LBFGS(fun=outer_objective, verbose=False, linesearch="zoom", history_size = 5)
+inner_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq']), fun = inner_objective) #, implicit_diff = True)
+# jaxopt.ArmijoSGD(fun=inner_objective, verbose=False)
+#
+#outer_optimizer = jaxopt.ArmijoSGD(fun=outer_objective, verbose=False)
+
+# jaxopt.LBFGS(fun=outer_objective, verbose=False, linesearch="zoom", history_size = 5)
 
 #jaxopt.LBFGS(fun=outer_objective, verbose=True, linesearch="zoom", implicit_diff = True,  history_size = 5)
 #jaxopt.LBFGS(fun=outer_objective, verbose=True, linesearch="zoom", implicit_diff = True)
@@ -239,7 +243,7 @@ for _ in range(metadata['epochs']):
         if(args['fix_tree']): 
             t_ = base_tree
         else:
-            t_ = update_tree(params, base_tree)
+            t_ = update_tree(tree_params, base_tree)
         t_d           = discretize_tree_topology(t_,n_all)
         tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, True)
         tree_matrix_at_epoch = px.imshow(t_, text_auto=True)
@@ -248,7 +252,7 @@ for _ in range(metadata['epochs']):
         if(args['fix_seqs']):
             seqs_ = seqs
         else:
-            seqs_ = update_seq(params, seqs, metadata['seq_temp'])
+            seqs_ = update_seq(seq_params, seqs, metadata['seq_temp'])
         new_seq = px.imshow(jnp.argmax(seqs_, axis = 2), text_auto=True)
 
     ## Compute the loss and the metrics for loggings purposes
@@ -260,9 +264,9 @@ for _ in range(metadata['epochs']):
     if(cost < best_ans):
         print_success_info("Found a better tree at epoch %d with cost %f \n" % (_, cost))
         best_ans = cost
-        t_ = update_tree(params, base_tree)
+        t_ = update_tree(tree_params, base_tree)
         best_tree = discretize_tree_topology(t_,n_all)
-        best_seq = update_seq(params, seqs, metadata['seq_temp'])
+        best_seq = update_seq(seq_params, seqs, metadata['seq_temp'])
         
     ## Log the metrics
     if(_%100==0):
@@ -288,11 +292,11 @@ for _ in range(metadata['epochs']):
     
     
     #=> Update the parameters
-    tree_params, outer_opt_state = jitted_outer_update(tree_params, outer_opt_state, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
-    
     for i in range(0, args['alternate_interval']):
         seq_params, inner_opt_state = jitted_inner_update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
 
+    for i in range(0, args['alternate_interval']):
+        tree_params, outer_opt_state = jitted_outer_update(tree_params, outer_opt_state, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
     
     #params, common_opt_state = common_optimizer.update(params, common_opt_state, seqs, base_tree, metadata, metadata['tLs'][0])
 

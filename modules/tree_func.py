@@ -52,7 +52,7 @@ def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes
     '''
 
     n_leaves = (base_tree.shape[1] - params['t'].shape[1])
-    key = jax.random.PRNGKey(epoch)
+    # key = jax.random.PRNGKey(epoch)
         
     # t_softmax = nn.softmax(,axis=1)
     t = base_tree.at[0:-1,n_leaves:].set(params['t']) # set the params['t'] to the ancestors
@@ -301,6 +301,7 @@ def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str
 
     return loss
 
+@jax.jit
 def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
     """Computes the total loss for a given set of sequences and a tree
 
