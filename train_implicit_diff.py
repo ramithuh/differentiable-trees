@@ -40,25 +40,17 @@ def combine_params(tree_params, seq_params):
     params.update(seq_params)
     return params
 
+
+
 def outer_objective(tree_params, seq_params, data):
     seqs, base_tree, metadata, temp = data
-    
-    common_dict = {}
-    
-    common_dict.update(tree_params)
-    common_dict.update(seq_params)
-    
-    return compute_loss_optimized(common_dict, seqs, base_tree, metadata, temp)
+
+    return compute_loss_optimized(tree_params, seq_params, seqs, base_tree, metadata, temp)
 
 def inner_objective(seq_params, tree_params, data):
     seqs, base_tree, metadata, temp = data
     
-    common_dict = {}
-    
-    common_dict.update(tree_params)
-    common_dict.update(seq_params)
-    
-    return compute_loss_optimized(common_dict, seqs, base_tree, metadata, temp)
+    return compute_loss_optimized(tree_params, seq_params, seqs, base_tree, metadata, temp)
 
 ## Parse Command Line Arguments and perform checks
 args = vars(parse_args_v2())
@@ -117,7 +109,7 @@ args['project'] = None
 
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])
-offset = 100
+offset = 0
 seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 0, maxval = 2).astype(jnp.bfloat16)
 
 #### Generate a base tree
@@ -193,7 +185,7 @@ seq_params : Dict[str, Array] = {}
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
     print_critical_info("Initializing tree using groundtruth tree \n")
-    tree_params['t'] = tree[0:-1,n_leaves:]*10
+    tree_params['t'] = tree[0:-1,n_leaves:]*100
     
 #### Add the ancestor sequences to the parameters
 for i in range(0, n_ancestors):
@@ -211,7 +203,7 @@ for i in range(0, n_ancestors):
 
 # common_optimizer = OptaxSolver(opt = optax.adam(0.1), fun = compute_loss)
 outer_optimizer = OptaxSolver(opt = optax.adam(0.1), fun = outer_objective)
-inner_optimizer =  OptaxSolver(opt = optax.adam(0.1), fun = inner_objective, implicit_diff = True)
+inner_optimizer = OptaxSolver(opt = optax.adam(0.1), fun = inner_objective, implicit_diff = True)
 #outer_optimizer = jaxopt.LBFGS(fun=outer_objective, verbose=False, linesearch="zoom", history_size = 5)
 
 #jaxopt.LBFGS(fun=outer_objective, verbose=True, linesearch="zoom", implicit_diff = True,  history_size = 5)
@@ -219,17 +211,13 @@ inner_optimizer =  OptaxSolver(opt = optax.adam(0.1), fun = inner_objective, imp
 #
 
 
-# print("parameters to optimize:", end = " -> ")
-# print(seq_params.keys())
-
-# opt_state = optimizer.init(params)
 params = combine_params(tree_params, seq_params)
 
 outer_opt_state = outer_optimizer.init_state(tree_params, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
 inner_opt_state = inner_optimizer.init_state(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
-# common_opt_state = common_optimizer.init_state(params, [seqs, base_tree, metadata, metadata['tLs'][0]])
 
 jitted_outer_update = jax.jit(outer_optimizer.update)
+jitted_inner_update = jax.jit(inner_optimizer.update)
 
 fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params, base_tree), n_all),n_leaves, True)
 
@@ -267,8 +255,7 @@ for _ in range(metadata['epochs']):
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
     # grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0], _)
-    params = combine_params(tree_params, seq_params)
-    cost, cost_surrogate, tree_force_loss, loss = compute_loss_optimized(params, seqs, base_tree, metadata, metadata['tLs'][0], epoch = _, verbose = True)
+    cost, cost_surrogate, tree_force_loss, loss = compute_loss_optimized(tree_params, seq_params, seqs, base_tree, metadata, metadata['tLs'][0], epoch = _, verbose = True)
 
     if(cost < best_ans):
         print_success_info("Found a better tree at epoch %d with cost %f \n" % (_, cost))
@@ -303,8 +290,8 @@ for _ in range(metadata['epochs']):
     #=> Update the parameters
     tree_params, outer_opt_state = jitted_outer_update(tree_params, outer_opt_state, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
     
-    for i in range(0,3):
-        seq_params, inner_opt_state = inner_optimizer.update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+    for i in range(0, 3):
+        seq_params, inner_opt_state = jitted_inner_update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
 
     
     #params, common_opt_state = common_optimizer.update(params, common_opt_state, seqs, base_tree, metadata, metadata['tLs'][0])
