@@ -202,8 +202,8 @@ for i in range(0, n_ancestors):
 #### Initialize the optimizer
 
 # common_optimizer = OptaxSolver(opt = optax.adam(0.1), fun = compute_loss)
-outer_optimizer = OptaxSolver(opt = optax.adam(0.1), fun = outer_objective)
-inner_optimizer = OptaxSolver(opt = optax.adam(0.1), fun = inner_objective, implicit_diff = True)
+outer_optimizer = OptaxSolver(opt = optax.adam(metadata['lr']), fun = outer_objective)
+inner_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq']), fun = inner_objective, implicit_diff = True)
 #outer_optimizer = jaxopt.LBFGS(fun=outer_objective, verbose=False, linesearch="zoom", history_size = 5)
 
 #jaxopt.LBFGS(fun=outer_objective, verbose=True, linesearch="zoom", implicit_diff = True,  history_size = 5)
@@ -290,7 +290,7 @@ for _ in range(metadata['epochs']):
     #=> Update the parameters
     tree_params, outer_opt_state = jitted_outer_update(tree_params, outer_opt_state, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
     
-    for i in range(0, 3):
+    for i in range(0, args['alternate_interval']):
         seq_params, inner_opt_state = jitted_inner_update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
 
     
