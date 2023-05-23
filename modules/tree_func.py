@@ -52,7 +52,7 @@ def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes
     '''
 
     n_leaves = (base_tree.shape[1] - params['t'].shape[1])
-    # key = jax.random.PRNGKey(epoch)
+    key = jax.random.PRNGKey(epoch)
         
     # t_softmax = nn.softmax(,axis=1)
     t = base_tree.at[0:-1,n_leaves:].set(params['t']) # set the params['t'] to the ancestors
@@ -62,9 +62,9 @@ def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes
     for i in range(0, t.shape[0]-1): ## loop until last node (excluding root)
         pos = max(i+1, n_leaves)
         
-        gumbel_noise = 0 #jax.random.gumbel(key, (t.shape[1]-pos,)) 
-        #key, _ = jax.random.split(key)
-        noisy_t = t[i, pos:] + gumbel_noise
+        gumbel_noise = jax.random.gumbel(key, (t.shape[1]-pos,)) 
+        key, _ = jax.random.split(key)
+        noisy_t = t[i, pos:] + gumbel_noise*0.1
 
         ## softmax over the topologically ordered ancestors 
         prob = jax.nn.softmax(noisy_t) # nn.softmax(t[i, pos:])

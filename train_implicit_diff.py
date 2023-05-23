@@ -21,6 +21,7 @@ import jax
 ## use cpu for the time being, let's see whether user requested a gpu later.
 jax.config.update("jax_default_device", jax.devices("cpu")[0]) 
 jax.config.update("jax_enable_x64", True)
+jax.config.update("jax_debug_nans", True)
 
 import jax.nn as nn
 import jax.numpy as jnp
@@ -50,18 +51,41 @@ def inner_objective(seq_params, tree_params, data):
     return compute_loss_optimized(tree_params, seq_params, seqs, base_tree, metadata, temp)
 
 # @jaxopt.implicit_diff.custom_root(jax.grad(inner_objective))
+
 @jit
 def inner_loop_solver(seq_params, tree_params, data):
     seqs, base_tree, metadata, temp = data
     
     #tree_optimizer = jaxopt.LBFGS(inner_objective, linesearch="zoom", maxiter  = args['alternate_interval'], implicit_diff = True)
-    inner_opt_state = tree_optimizer.init_state(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+    inner_opt_state = seq_optimizer.init_state(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
     
     #seq_params = tree_optimizer.run(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]]).params
-    for i in range(0, tree_optimizer.maxiter):
-       seq_params, inner_opt_state = tree_optimizer.update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+    for i in range(0, seq_optimizer.maxiter):
+       seq_params, inner_opt_state = seq_optimizer.update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
 
     return seq_params
+
+# def inner_loop_solver(seq_params, tree_params, data):
+#     seqs, base_tree, metadata, temp = data
+
+#     inner_opt_state = seq_optimizer.init_state(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+
+#     @jax.jit
+#     def scan_fn(state, i):
+#         seq_params, inner_opt_state = state
+#         new_seq_params, new_inner_opt_state = seq_optimizer.update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+#         return (new_seq_params, new_inner_opt_state), None
+
+#     initial_state = (seq_params, inner_opt_state)
+#     for i in range(0, seq_optimizer.maxiter):
+#         initial_state, _ = scan_fn(initial_state, i)
+    
+#     #final_state, _ = jax.lax.scan(scan_fn, initial_state, jnp.arange(seq_optimizer.maxiter))
+
+#     seq_params, _ = initial_state #final_state
+
+#     return seq_params
+
 
 @jit
 def outer_objective(tree_params, seq_params, data):
@@ -202,7 +226,8 @@ initializer = jax.nn.initializers.orthogonal()
 
 
 tree_params : Dict[str, Array] = {
-    't': initializer(key + offset, (n_all - 1,n_ancestors), jnp.float32) 
+    't': jnp.zeros((n_all - 1,n_ancestors)).astype(jnp.float32)
+        #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float32) 
         #jax.random.normal(key + offset, (n_all - 1,n_ancestors)).astype(jnp.float32)
     }
 
@@ -231,11 +256,11 @@ for i in range(0, n_ancestors):
 
 copy_seq_params = seq_params.copy()
 
-tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'],  eps_root = 1e-8), fun = inner_objective, maxiter  = args['alternate_interval'], implicit_diff = True) 
-seq_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8), fun = outer_objective, has_aux = True) #, implicit_diff = True)
+seq_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'],  eps_root = 1e-8, eps = 1e-8), fun = inner_objective, maxiter  = args['alternate_interval'], implicit_diff = True) 
+tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8, eps = 1e-8), fun = outer_objective, has_aux = True) #, implicit_diff = True)
 
-tree_opt_state = seq_optimizer.init_state(tree_params, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
-jitted_tree_update = jax.jit(seq_optimizer.update)
+tree_opt_state = tree_optimizer.init_state(tree_params, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+jitted_tree_update = jax.jit(tree_optimizer.update)
 
 params = combine_params(tree_params, seq_params)
 
