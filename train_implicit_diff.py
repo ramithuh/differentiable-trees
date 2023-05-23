@@ -47,6 +47,7 @@ def combine_params(tree_params, seq_params):
 def outer_objective(tree_params, seq_params, data):
     seqs, base_tree, metadata, temp = data
     
+    inner_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'],  eps_root = 1e-8), fun = inner_objective, maxiter  = args['alternate_interval']) 
     inner_opt_state = inner_optimizer.init_state(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
     
     for i in range(0, inner_optimizer.maxiter):
@@ -211,9 +212,7 @@ for i in range(0, n_ancestors):
 
 copy_seq_params = seq_params.copy()
 
-inner_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'],  eps_root = 1e-8), fun = inner_objective, maxiter  = args['alternate_interval'], implicit_diff = True) 
-
-outer_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8), fun = outer_objective, has_aux = True)
+outer_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8), fun = outer_objective, has_aux = True) #, implicit_diff = True)
 outer_opt_state = outer_optimizer.init_state(tree_params, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
 jitted_outer_update = jax.jit(outer_optimizer.update)
 
