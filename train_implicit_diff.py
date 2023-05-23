@@ -47,8 +47,6 @@ def combine_params(tree_params, seq_params):
 def outer_objective(tree_params, seq_params, data):
     seqs, base_tree, metadata, temp = data
     
-    
-    inner_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'],  eps_root = 1e-8), fun = inner_objective, maxiter = 5) 
     inner_opt_state = inner_optimizer.init_state(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
     
     for i in range(0, inner_optimizer.maxiter):
@@ -56,6 +54,7 @@ def outer_objective(tree_params, seq_params, data):
 
     return compute_loss_optimized(tree_params, seq_params, seqs, base_tree, metadata, temp), seq_params
 
+@jax.jit
 def inner_objective(seq_params, tree_params, data):
     seqs, base_tree, metadata, temp = data
     
@@ -212,15 +211,16 @@ for i in range(0, n_ancestors):
 
 copy_seq_params = seq_params.copy()
 
-# common_optimizer = OptaxSolver(opt = optax.adam(0.1), fun = compute_loss)
-outer_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8), fun = outer_objective, maxiter = args['alternate_interval'], has_aux = True)
-#, implicit_diff = True)
+inner_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'],  eps_root = 1e-8), fun = inner_objective, maxiter  = args['alternate_interval'], implicit_diff = True) 
+
+outer_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8), fun = outer_objective, has_aux = True)
+outer_opt_state = outer_optimizer.init_state(tree_params, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+jitted_outer_update = jax.jit(outer_optimizer.update)
 
 params = combine_params(tree_params, seq_params)
 
-outer_opt_state = outer_optimizer.init_state(tree_params, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
 
-jitted_outer_update = jax.jit(outer_optimizer.update)
+
 
 fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params, base_tree), n_all),n_leaves, True)
 
