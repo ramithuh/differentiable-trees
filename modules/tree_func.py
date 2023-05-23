@@ -219,7 +219,7 @@ def compute_cost(sequences : Float[Array, "nodes seq_length letters"], tree : Fl
     selection_ = jnp.matmul(discretize_tree_topology(tree, tree.shape[0]), jnp.argmax(sequences, axis = 2))
     sequences_ = jnp.argmax(sequences, axis = 2)
     
-    ans = sm[jnp.round(selection_).astype(jnp.int32),jnp.round(sequences_).astype(jnp.int32)].sum()
+    ans = sm[jnp.round(selection_).astype(jnp.int64),jnp.round(sequences_).astype(jnp.int64)].sum()
 
     return ans
 

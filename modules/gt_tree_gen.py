@@ -96,7 +96,7 @@ def generate_groundtruth(metadata : Dict[str, int], seed = 42, verbose = False) 
 
     target_depth = int(math.log2(n_leaves))-1
 
-    seq = jnp.zeros(seq_length, dtype=jnp.int32)
+    seq = jnp.zeros(seq_length, dtype=jnp.int64)
 
     sequences = [[] for x in range(target_depth + 1)]
     create_seq(key,seq,0)
