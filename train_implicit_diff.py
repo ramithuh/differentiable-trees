@@ -47,11 +47,13 @@ def combine_params(tree_params, seq_params):
 def outer_objective(tree_params, seq_params, data):
     seqs, base_tree, metadata, temp = data
     
-    inner_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'],  eps_root = 1e-8), fun = inner_objective, maxiter  = args['alternate_interval']) 
+    #inner_optimizer = jaxopt.LBFGS(inner_objective, linesearch="zoom", maxiter  = args['alternate_interval'], implicit_diff = True)
+    inner_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'],  eps_root = 1e-8), fun = inner_objective, maxiter  = args['alternate_interval'], implicit_diff = True) 
     inner_opt_state = inner_optimizer.init_state(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
     
+    #seq_params = inner_optimizer.run(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]]).params
     for i in range(0, inner_optimizer.maxiter):
-        seq_params, inner_opt_state = inner_optimizer.update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+       seq_params, inner_opt_state = inner_optimizer.update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
 
     return compute_loss_optimized(tree_params, seq_params, seqs, base_tree, metadata, temp), seq_params
 
@@ -59,7 +61,15 @@ def outer_objective(tree_params, seq_params, data):
 def inner_objective(seq_params, tree_params, data):
     seqs, base_tree, metadata, temp = data
     
-    return compute_loss_optimized(tree_params, seq_params, seqs, base_tree, metadata, temp)
+    seqs_ = update_seq(seq_params, seqs, temp)
+    t_    = update_tree(tree_params, base_tree, 0)
+    
+
+    cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
+
+    
+    return cost_surrogate#= cost_surrogate + temp*(tree_force_loss)
+    #return compute_loss_optimized(tree_params, seq_params, seqs, base_tree, metadata, temp)
 
 ## Parse Command Line Arguments and perform checks
 args = vars(parse_args_v2())

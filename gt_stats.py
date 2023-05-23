@@ -61,7 +61,7 @@ if(args['shuffle_seqs']):
     seqs = seqs.at[n_leaves:-1].set(shuffled_ancestors)
 
 
-cost_matrix = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.bfloat16)
+cost_matrix = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.float32)
 
 print("Sequences: (truncated to 20 characters)")
 arr = []
