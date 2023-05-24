@@ -35,45 +35,42 @@ def discretize_tree_topology(tree : Float[Array, "nodes nodes"], n_nodes : int) 
     return t_q
 
 @jit
-def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes"], epoch : int = 0 ) -> Float[Array, "nodes nodes"]:
+def update_tree(params : Dict[str, Array], epoch : int = 0 ,  temp : Float = 1 ) -> Float[Array, "nodes nodes"]:
     '''
         Uses base_tree and returns the updated soft tree topology
         Particularly updates the ancestor probabilities in the trees
 
         Args:
             params : params['t'] denotes the trainable params; (ancestors)
-                     params['t'] -> (n_nodes, n_ancestors)
+                     params['t'] -> (n_nodes-1, n_ancestors)
 
-            base_tree : base tree topology
-                        base_tree -> (n_nodes, n_nodes)
+            epoch : epoch number
+            temp : temperature for softmax
+            
         Returns:
             t : updated soft tree topology
                 t -> (n_nodes, n_nodes)
     '''
-
-    n_leaves = (base_tree.shape[1] - params['t'].shape[1])
-    key = jax.random.PRNGKey(epoch)
-        
-    # t_softmax = nn.softmax(,axis=1)
-    t = base_tree.at[0:-1,n_leaves:].set(params['t']) # set the params['t'] to the ancestors
-    t = t.at[:,:].set(jnp.triu(t,1)) ## enforce upper triangularity (above main diagonal)
-
-    #custom softmax over the topologically ordered ancestors
-    for i in range(0, t.shape[0]-1): ## loop until last node (excluding root)
-        pos = max(i+1, n_leaves)
-        
-        gumbel_noise = jax.random.gumbel(key, (t.shape[1]-pos,)) 
-        key, _ = jax.random.split(key)
-        noisy_t = t[i, pos:] + gumbel_noise*0.1
-
-        ## softmax over the topologically ordered ancestors 
-        prob = jax.nn.softmax(noisy_t) # nn.softmax(t[i, pos:])
-
-        t = t.at[i, pos:].set(prob)
+    n_all = params['t'].shape[0] + 1 #(adding +1 because params doesn't have the root node)
+    n_ancestors = params['t'].shape[1]
+    n_leaves = n_all - n_ancestors
     
-    t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself. i.e. root) 
+    key = jax.random.PRNGKey(epoch) # generate a random key
+    gumbel_noise = jax.random.gumbel(key, (params['t'].shape[0], params['t'].shape[1])) # generate gumbel noise
+
+    perturbed_tree_params = params['t'] + gumbel_noise*0.5 # add gumbel noise to the tree params
+
+    inf_matrix = -jnp.ones((n_all, n_all))*jnp.inf
+                    
+    # generating the upper indices of the lower square matrix
+    lower_indices = jnp.triu_indices(n_ancestors)
+    shifted_lower_indices = (lower_indices[0] + n_ancestors, lower_indices[1] + n_leaves )
+
+    inf_matrix = inf_matrix.at[:n_ancestors, n_leaves:].set(perturbed_tree_params[:n_ancestors])
+    inf_matrix = inf_matrix.at[shifted_lower_indices].set(perturbed_tree_params[n_ancestors:, :][lower_indices])
+    inf_matrix = inf_matrix.at[-1,-1].set(1)
     
-    return t
+    return jax.nn.softmax(inf_matrix, axis = 1)
 
 @jit
 def update_tree_sankoff(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes"], epoch : int = 0 ) -> Float[Array, "nodes nodes"]:
@@ -132,7 +129,7 @@ def update_seq(params : Dict[str, Array], seqs : Float[Array, "nodes letters"], 
         # print(params[key].shape)
         # print(seq.shape)
         # break
-        seq      = nn.softmax(temperature*params[key])
+        seq      = nn.softmax(params[key]*temperature)
         #hard_seq = (seq > 0.5).astype(int)
         
         seqs = seqs.at[- n_leaves + i + 1].set(seq)
@@ -176,7 +173,11 @@ def enforce_graph(t_ : Float[Array, "nodes nodes"], s : Float, metadata = None, 
     # n_leaves = metadata['n_leaves']
     # n_ancestors = metadata['n_ancestors']
 
-    tree_force_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(t_[:-1, n_all - n_ancestors: n_all], axis = 0) - 2),2))
+
+    ancestor_columns = t_[:-1, n_all - n_ancestors: n_all]
+    # scaling_vecotr = 
+
+    tree_force_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(ancestor_columns, axis = 0) - 2),2))
     
     if(verbose):
         print("bifurcating tree_forcing_loss = ", tree_force_loss)
@@ -248,7 +249,7 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
     if(metadata['args']['fix_tree']):
         t_ = base_tree
     else:   
-        t_ = update_tree(params, base_tree, epoch)
+        t_ = update_tree(params, epoch)
     
 
     cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
@@ -265,7 +266,7 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
 
     return loss
 
-def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, epoch : int = 0, verbose = False) -> Float:
+def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], metadata : Dict, temp : Float, epoch : int = 0, verbose = False) -> Float:
     """Computes the total loss for a given set of sequences and a tree
 
     Args:
@@ -284,7 +285,7 @@ def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str
 
     seqs_ = update_seq(seq_params, seqs, temp )
     
-    t_ = update_tree(tree_params, base_tree, epoch)
+    t_ = update_tree(tree_params, epoch, temp)
     
 
     cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost

@@ -4,6 +4,9 @@ import sys
 import optax
 import jaxopt
 from jaxopt import OptaxSolver
+from jaxopt import linear_solve
+from jax.tree_util import Partial
+
 
 import wandb
 import pydot
@@ -46,22 +49,22 @@ def combine_params(tree_params, seq_params):
 
 @jax.jit
 def inner_objective(seq_params, tree_params, data):
-    seqs, base_tree, metadata, temp = data
+    seqs, metadata, temp = data
     
-    return compute_loss_optimized(tree_params, seq_params, seqs, base_tree, metadata, temp)
+    return compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp)
 
 # @jaxopt.implicit_diff.custom_root(jax.grad(inner_objective))
 
 @jit
 def inner_loop_solver(seq_params, tree_params, data):
-    seqs, base_tree, metadata, temp = data
+    seqs, metadata, temp = data
     
     #tree_optimizer = jaxopt.LBFGS(inner_objective, linesearch="zoom", maxiter  = args['alternate_interval'], implicit_diff = True)
-    inner_opt_state = seq_optimizer.init_state(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+    inner_opt_state = seq_optimizer.init_state(seq_params, tree_params, [seqs, metadata, metadata['tLs'][0]])
     
-    #seq_params = tree_optimizer.run(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]]).params
+    #seq_params = seq_optimizer.run(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]]).params
     for i in range(0, seq_optimizer.maxiter):
-       seq_params, inner_opt_state = seq_optimizer.update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+      seq_params, inner_opt_state = seq_optimizer.update(seq_params, inner_opt_state, tree_params, [seqs, metadata, metadata['tLs'][0]])
 
     return seq_params
 
@@ -77,23 +80,23 @@ def inner_loop_solver(seq_params, tree_params, data):
 #         return (new_seq_params, new_inner_opt_state), None
 
 #     initial_state = (seq_params, inner_opt_state)
-#     for i in range(0, seq_optimizer.maxiter):
-#         initial_state, _ = scan_fn(initial_state, i)
+#     # for i in range(0, seq_optimizer.maxiter):
+#     #     initial_state, _ = scan_fn(initial_state, i)
     
-#     #final_state, _ = jax.lax.scan(scan_fn, initial_state, jnp.arange(seq_optimizer.maxiter))
+#     final_state, _ = jax.lax.scan(scan_fn, initial_state, jnp.arange(seq_optimizer.maxiter))
 
-#     seq_params, _ = initial_state #final_state
+#     seq_params, _ = final_state
 
 #     return seq_params
 
 
 @jit
 def outer_objective(tree_params, seq_params, data):
-    seqs, base_tree, metadata, temp = data
+    seqs, metadata, temp = data
     
-    seq_params = inner_loop_solver(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+    seq_params = inner_loop_solver(seq_params, tree_params, [seqs, metadata, metadata['tLs'][0]])
     
-    return compute_loss_optimized(tree_params, seq_params, seqs, base_tree, metadata, temp), seq_params
+    return compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp), seq_params
 
 
 
@@ -256,10 +259,25 @@ for i in range(0, n_ancestors):
 
 copy_seq_params = seq_params.copy()
 
+# seq_optimizer = jaxopt.GradientDescent(
+#   inner_objective, 
+#   stepsize=-1,  # using line search
+#   maxiter=16, 
+#   tol=1e-12, 
+#   maxls=15,
+#   acceleration=False,
+#   implicit_diff=True,
+#   implicit_diff_solve=Partial(
+#       linear_solve.solve_cg,
+#       maxiter=5,
+#       tol=1e-7,
+#   ),
+# )
+
 seq_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'],  eps_root = 1e-8, eps = 1e-8), fun = inner_objective, maxiter  = args['alternate_interval'], implicit_diff = True) 
 tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8, eps = 1e-8), fun = outer_objective, has_aux = True) #, implicit_diff = True)
 
-tree_opt_state = tree_optimizer.init_state(tree_params, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+tree_opt_state = tree_optimizer.init_state(tree_params, seq_params, [seqs, metadata, metadata['tLs'][0]])
 jitted_tree_update = jax.jit(tree_optimizer.update)
 
 params = combine_params(tree_params, seq_params)
@@ -267,7 +285,7 @@ params = combine_params(tree_params, seq_params)
 
 
 
-fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params, base_tree), n_all),n_leaves, True)
+fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params), n_all),n_leaves, True)
 
 
 
@@ -287,7 +305,7 @@ for _ in range(metadata['epochs']):
         if(args['fix_tree']): 
             t_ = base_tree
         else:
-            t_ = update_tree(tree_params, base_tree)
+            t_ = update_tree(tree_params, _, metadata['tLs'][0])
         t_d           = discretize_tree_topology(t_,n_all)
         tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, True)
         tree_matrix_at_epoch = px.imshow(t_, text_auto=True)
@@ -303,12 +321,12 @@ for _ in range(metadata['epochs']):
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
     # grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0], _)
-    cost, cost_surrogate, tree_force_loss, loss = compute_loss_optimized(tree_params, seq_params, seqs, base_tree, metadata, metadata['tLs'][0], epoch = _, verbose = True)
+    cost, cost_surrogate, tree_force_loss, loss = compute_loss_optimized(tree_params, seq_params, seqs, metadata, metadata['tLs'][0], epoch = _, verbose = True)
 
     if(cost < best_ans):
         print_success_info("Found a better tree at epoch %d with cost %f \n" % (_, cost))
         best_ans = cost
-        t_ = update_tree(tree_params, base_tree)
+        t_ = update_tree(tree_params, _, metadata['tLs'][0])
         best_tree = discretize_tree_topology(t_,n_all)
         best_seq = update_seq(seq_params, seqs, metadata['seq_temp'])
         
@@ -336,7 +354,7 @@ for _ in range(metadata['epochs']):
     
     
     #=> Update the parameters
-    tree_params, tree_opt_state = jitted_tree_update(tree_params, tree_opt_state, tree_opt_state.aux, [seqs, base_tree, metadata, metadata['tLs'][0]])
+    tree_params, tree_opt_state = jitted_tree_update(tree_params, tree_opt_state, tree_opt_state.aux, [seqs, metadata, metadata['tLs'][0]])
     seq_params = tree_opt_state.aux
     #params, common_opt_state = common_optimizer.update(params, common_opt_state, seqs, base_tree, metadata, metadata['tLs'][0])
 
