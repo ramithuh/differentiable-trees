@@ -110,7 +110,7 @@ args['project'] = None
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])
 offset = 0
-seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 0, maxval = 2).astype(jnp.bfloat16)
+seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 0, maxval = 2).astype(jnp.float64)
 
 #### Generate a base tree
 base_tree = jnp.zeros((n_all, n_all))
@@ -119,8 +119,8 @@ base_tree = jnp.zeros((n_all, n_all))
 if(args['groundtruth']):
     seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
 
-    seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.bfloat16)
-    gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.bfloat16)
+    seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.float64)
+    gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.float64)
 
     #if we don't want sequences to change, set seqs to gt_seqs
     if(args['fix_seqs'] or args['initialize_seq']):
@@ -133,7 +133,7 @@ if(args['groundtruth']):
     if(not(args['fix_seqs'])):
         ## since we know the gt tree, let's get the real ancestors using sankoff algorithm! 🎉 
         ## This will help us to see whether there's a better groundtruth ancestors for this tree
-        cost_mat = (jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)).astype(jnp.bfloat16)
+        cost_mat = (jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)).astype(jnp.float64)
         
         print("running sankoff on groundtruth tree")
         _, _, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
@@ -143,7 +143,7 @@ if(args['groundtruth']):
             {
                 #'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
                 'sankoff_cost': sankoff_cost,
-                #'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.bfloat16), tree, metadata, surrogate_loss = False)
+                #'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.float64), tree, metadata, surrogate_loss = False)
             })
         
     if(args['shuffle_seqs']):        
@@ -157,7 +157,7 @@ if(args['groundtruth']):
     gt_seqs_plot = px.imshow(jnp.argmax(gt_seqs, axis = 2), text_auto=True)
 
     
-    sm   = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.bfloat16)
+    sm   = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.float64)
     gt_cost           = compute_cost(gt_seqs, tree, sm)
     gt_cost_surrogate = compute_surrogate_cost(gt_seqs, tree)
     
@@ -176,7 +176,7 @@ if(args['groundtruth']):
 
 #### Define parameters (t and the ancestor sequences)
 tree_params : Dict[str, Array] = {
-    't': jax.random.normal(key + offset, (n_all - 1,n_ancestors)).astype(jnp.bfloat16)
+    't': jax.random.normal(key + offset, (n_all - 1,n_ancestors)).astype(jnp.float64)
     }
 
 seq_params : Dict[str, Array] = {}
@@ -195,18 +195,18 @@ for i in range(0, n_ancestors):
             raise NotImplementedError("Sankoff backtracking not implemented for n_leaves > 1024 due to execution time")
         else:
             print_critical_info("Initializing sequences using sankoff ancestors \n")
-            seq_params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.bfloat16)*100
+            seq_params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.float64)*100
     else:
-        seq_params[str(i)] = jax.random.normal(key+i+offset, (seq_length, n_letters)).astype(jnp.bfloat16)
+        seq_params[str(i)] = jax.random.normal(key+i+offset, (seq_length, n_letters)).astype(jnp.float64)
     
 #### Initialize the optimizer
 
 # common_optimizer = OptaxSolver(opt = optax.adam(0.1), fun = compute_loss)
-outer_optimizer = OptaxSolver(opt = optax.adam(metadata['lr']), fun = outer_objective)
-inner_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq']), fun = inner_objective) #, implicit_diff = True)
+tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr']), fun = outer_objective)
+seq_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq']), fun = inner_objective) #, implicit_diff = True)
 # jaxopt.ArmijoSGD(fun=inner_objective, verbose=False)
 #
-#outer_optimizer = jaxopt.ArmijoSGD(fun=outer_objective, verbose=False)
+#tree_optimizer = jaxopt.ArmijoSGD(fun=outer_objective, verbose=False)
 
 # jaxopt.LBFGS(fun=outer_objective, verbose=False, linesearch="zoom", history_size = 5)
 
@@ -217,11 +217,11 @@ inner_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq']), fun = inner_
 
 params = combine_params(tree_params, seq_params)
 
-outer_opt_state = outer_optimizer.init_state(tree_params, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
-inner_opt_state = inner_optimizer.init_state(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+outer_opt_state = tree_optimizer.init_state(tree_params, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+inner_opt_state = seq_optimizer.init_state(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
 
-jitted_outer_update = jax.jit(outer_optimizer.update)
-jitted_inner_update = jax.jit(inner_optimizer.update)
+jitted_seq_update = jax.jit(tree_optimizer.update)
+jitted_tree_update = jax.jit(seq_optimizer.update)
 
 fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params, base_tree), n_all),n_leaves, True)
 
@@ -293,10 +293,10 @@ for _ in range(metadata['epochs']):
     
     #=> Update the parameters
     for i in range(0, args['alternate_interval']):
-        seq_params, inner_opt_state = jitted_inner_update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+        seq_params, inner_opt_state = jitted_tree_update(seq_params, inner_opt_state, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
 
     for i in range(0, args['alternate_interval']):
-        tree_params, outer_opt_state = jitted_outer_update(tree_params, outer_opt_state, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
+        tree_params, outer_opt_state = jitted_seq_update(tree_params, outer_opt_state, seq_params, [seqs, base_tree, metadata, metadata['tLs'][0]])
     
     #params, common_opt_state = common_optimizer.update(params, common_opt_state, seqs, base_tree, metadata, metadata['tLs'][0])
 

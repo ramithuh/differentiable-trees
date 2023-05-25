@@ -17,7 +17,7 @@ def print_matrix(mat, mask_value, masked_char='-', padding=4):
     '''
         Nicely print matrix -_-
     '''
-    matrix = mat.astype(jnp.float32)
+    matrix = mat.astype(jnp.float64)
     
     for row in matrix:
         for value in row:

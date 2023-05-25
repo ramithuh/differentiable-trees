@@ -128,18 +128,18 @@ args['project'] = None
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])
 offset = 0
-seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 0, maxval = 2).astype(jnp.float32)
+seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 0, maxval = 2).astype(jnp.float64)
 
 #### Generate a base tree
 base_tree = jnp.zeros((n_all, n_all))
 
-sm = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.float32)
+sm = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.float64)
 
 if(args['groundtruth']):
     seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
 
-    seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.float32)
-    gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.float32)
+    seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.float64)
+    gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.float64)
 
     #if we don't want sequences to change, set seqs to gt_seqs
     if(args['fix_seqs'] or args['initialize_seq']):
@@ -152,7 +152,7 @@ if(args['groundtruth']):
     if(not(args['fix_seqs'])):
         ## since we know the gt tree, let's get the real ancestors using sankoff algorithm! 🎉 
         ## This will help us to see whether there's a better groundtruth ancestors for this tree
-        cost_mat = (jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)).astype(jnp.float32)
+        cost_mat = (jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)).astype(jnp.float64)
         
         print("running sankoff on groundtruth tree")
         _, _, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
@@ -162,7 +162,7 @@ if(args['groundtruth']):
             {
                 #'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
                 'sankoff_cost': sankoff_cost,
-                #'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.float32), tree, metadata, surrogate_loss = False)
+                #'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.float64), tree, metadata, surrogate_loss = False)
             })
         
     if(args['shuffle_seqs']):        
@@ -199,12 +199,12 @@ initializer = jax.nn.initializers.orthogonal()
 
 
 tree_params : Dict[str, Array] = {
-    't': initializer(key + offset, (n_all - 1,n_ancestors), jnp.float32) 
-        #jnp.zeros((n_all - 1,n_ancestors)).astype(jnp.float32)
-        #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float32) 
+    't': initializer(key + offset, (n_all - 1,n_ancestors), jnp.float64) 
+        #jnp.zeros((n_all - 1,n_ancestors)).astype(jnp.float64)
+        #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float64) 
         #
-        #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float32) 
-        #jax.random.normal(key + offset, (n_all - 1,n_ancestors)).astype(jnp.float32)
+        #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float64) 
+        #jax.random.normal(key + offset, (n_all - 1,n_ancestors)).astype(jnp.float64)
     }
 
 seq_params : Dict[str, Array] = {}
@@ -223,10 +223,10 @@ for i in range(0, n_ancestors):
             raise NotImplementedError("Sankoff backtracking not implemented for n_leaves > 1024 due to execution time")
         else:
             print_critical_info("Initializing sequences using sankoff ancestors \n")
-            seq_params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.float32)*100
+            seq_params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.float64)*100
     else:
-        seq_params[str(i)] = initializer(key+i+offset, (seq_length, n_letters), jnp.float32) 
-        #jax.random.normal(key+i+offset, (seq_length, n_letters)).astype(jnp.float32)
+        seq_params[str(i)] = initializer(key+i+offset, (seq_length, n_letters), jnp.float64) 
+        #jax.random.normal(key+i+offset, (seq_length, n_letters)).astype(jnp.float64)
     
 #### Initialize the optimizer
 

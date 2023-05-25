@@ -58,7 +58,7 @@ def update_tree(params : Dict[str, Array], epoch : int = 0 ,  temp : Float = 1 )
     key = jax.random.PRNGKey(epoch) # generate a random key
     gumbel_noise = jax.random.gumbel(key, (params['t'].shape[0], params['t'].shape[1])) # generate gumbel noise
 
-    perturbed_tree_params = params['t'] + gumbel_noise*0.5 # add gumbel noise to the tree params
+    perturbed_tree_params = params['t'] + gumbel_noise*0.2 # add gumbel noise to the tree params
 
     inf_matrix = -jnp.ones((n_all, n_all))*jnp.inf
                     
@@ -356,7 +356,7 @@ def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes l
     
     recurse_cost = 0 #_h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
     
-    cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters']).astype(jnp.float32)
+    cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters']).astype(jnp.float64)
     _, cost_surrogate_sankoff = run_diff_sankoff(t_, cost_mat, jnp.argmax(seqs, axis = 2), metadata, epsilon = (0.145e-1)/(1+temp))
     
    
