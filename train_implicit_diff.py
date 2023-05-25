@@ -7,7 +7,6 @@ from jaxopt import OptaxSolver
 from jaxopt import linear_solve
 from jax.tree_util import Partial
 
-
 import wandb
 import pydot
 import warnings
@@ -62,9 +61,9 @@ def inner_loop_solver(seq_params, tree_params, data):
     #tree_optimizer = jaxopt.LBFGS(inner_objective, linesearch="zoom", maxiter  = args['alternate_interval'], implicit_diff = True)
     inner_opt_state = seq_optimizer.init_state(seq_params, tree_params, [seqs, metadata, metadata['tLs'][0]])
     
-    #seq_params = seq_optimizer.run(seq_params, tree_params, [seqs, base_tree, metadata, metadata['tLs'][0]]).params
+    #seq_params = seq_optimizer.run(seq_params, tree_params, [seqs, metadata, metadata['tLs'][0]]).params
     for i in range(0, seq_optimizer.maxiter):
-      seq_params, inner_opt_state = seq_optimizer.update(seq_params, inner_opt_state, tree_params, [seqs, metadata, metadata['tLs'][0]])
+        seq_params, inner_opt_state = jitted_seq_update(seq_params, inner_opt_state, tree_params, [seqs, metadata, metadata['tLs'][0]])
 
     return seq_params
 
@@ -163,6 +162,7 @@ seqs = jax.random.randint(key, shape = (n_all, seq_length, n_letters), minval = 
 #### Generate a base tree
 base_tree = jnp.zeros((n_all, n_all))
 
+sm = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.float32)
 
 if(args['groundtruth']):
     seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
@@ -205,7 +205,6 @@ if(args['groundtruth']):
     gt_seqs_plot = px.imshow(jnp.argmax(gt_seqs, axis = 2), text_auto=True)
 
     
-    sm   = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.float32)
     gt_cost           = compute_cost(gt_seqs, tree, sm)
     gt_cost_surrogate = compute_surrogate_cost(gt_seqs, tree)
     
@@ -229,7 +228,8 @@ initializer = jax.nn.initializers.orthogonal()
 
 
 tree_params : Dict[str, Array] = {
-    't': jnp.zeros((n_all - 1,n_ancestors)).astype(jnp.float32)
+    't': initializer(key + offset, (n_all - 1,n_ancestors), jnp.float32) 
+        #jnp.zeros((n_all - 1,n_ancestors)).astype(jnp.float32)
         #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float32) 
         #jax.random.normal(key + offset, (n_all - 1,n_ancestors)).astype(jnp.float32)
     }
@@ -259,24 +259,10 @@ for i in range(0, n_ancestors):
 
 copy_seq_params = seq_params.copy()
 
-# seq_optimizer = jaxopt.GradientDescent(
-#   inner_objective, 
-#   stepsize=-1,  # using line search
-#   maxiter=16, 
-#   tol=1e-12, 
-#   maxls=15,
-#   acceleration=False,
-#   implicit_diff=True,
-#   implicit_diff_solve=Partial(
-#       linear_solve.solve_cg,
-#       maxiter=5,
-#       tol=1e-7,
-#   ),
-# )
-
 seq_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'],  eps_root = 1e-8, eps = 1e-8), fun = inner_objective, maxiter  = args['alternate_interval'], implicit_diff = True) 
-tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8, eps = 1e-8), fun = outer_objective, has_aux = True) #, implicit_diff = True)
+jitted_seq_update = jax.jit(seq_optimizer.update)
 
+tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8, eps = 1e-8), fun = outer_objective, has_aux = True) #, implicit_diff = True)
 tree_opt_state = tree_optimizer.init_state(tree_params, seq_params, [seqs, metadata, metadata['tLs'][0]])
 jitted_tree_update = jax.jit(tree_optimizer.update)
 
@@ -321,7 +307,7 @@ for _ in range(metadata['epochs']):
     ##=> sort of forward model (using params to generate new sequences and tree)
     #=> Compute the gradients
     # grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0], _)
-    cost, cost_surrogate, tree_force_loss, loss = compute_loss_optimized(tree_params, seq_params, seqs, metadata, metadata['tLs'][0], epoch = _, verbose = True)
+    cost, cost_surrogate, tree_force_loss, loss = compute_detailed_loss_optimized(tree_params, seq_params, seqs, metadata, metadata['tLs'][0], sm, epoch = _)
 
     if(cost < best_ans):
         print_success_info("Found a better tree at epoch %d with cost %f \n" % (_, cost))
