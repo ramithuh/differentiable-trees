@@ -1,3 +1,7 @@
+from jax import config
+config.update("jax_enable_x64", True)
+config.update("jax_debug_nans", True)
+
 import os
 import sys
 
@@ -22,9 +26,6 @@ rc('animation', html='jshtml')
 import jax
 ## use cpu for the time being, let's see whether user requested a gpu later.
 jax.config.update("jax_default_device", jax.devices("cpu")[0]) 
-jax.config.update("jax_enable_x64", True)
-jax.config.update("jax_debug_nans", True)
-
 import jax.nn as nn
 import jax.numpy as jnp
 from jax.lib import xla_bridge
