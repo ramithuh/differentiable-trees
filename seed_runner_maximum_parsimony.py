@@ -2,12 +2,17 @@ import subprocess
 import os
 import math
         
-print("Which GPU do you want to restrict to?")
-id = input()
-os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
+# print("Which GPU do you want to restrict to?")
+# id = input()
+# os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
+
+
+print("how much percentage to dedicate from gpu (eg. .90)?")
+percentage = input()
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = percentage
 
 # Define the list of seeds you want to use
-seeds = [x+42 for x in range(10)][::-1]
+seeds = [x+42 for x in range(10)]#[::-1]
 
 # Define the leaf complexity you want to use
 print("which leaf complexity do you want to use?")
@@ -21,18 +26,21 @@ print("ok will run for the following leaf complexities:")
 print(leaves)
 
 # Common command and arguments
-base = ["python", "train.py", "-nl", "20", "-m", "50", "-sl", "256", "-tLs", "[0,0.005,10,50]", "-lr", "0.1","-lr_seq", "0.1","-t", "learning_both", "-p","Batch-Run-Maximum-Parsimony-A100-triu-optimized", "-alt", "-ai", "10", "-n", "Batch Run"]
+base = ["python", "train_implicit_diff.py", "-nl", "20", "-m", "50", "-sl", "256", "-tLs", "[0,0.005,10,50]", "-lr", "0.1","-lr_seq", "0.01","-t", "float64", "-p","Batch-Run-Maximum-Parsimony-A100-META-optimized", "-alt", "-n", "64x META"]
 base = base + ["-g", "0"]
 
 for l in leaves:
     cmd = base + ["-l", str(l)]
     
-    if(l < 16):
+    if(l < 128):
         cmd = cmd + ["-e", "5000"]
+        cmd = cmd + ["-ai", "1"]
     elif(l < 128):
-        cmd = cmd + ["-e", "15000"]
+        cmd = cmd + ["-e", "5000"]
+        cmd = cmd + ["-ai", "10"]
     else:
         cmd = cmd + ["-e", "25000"]
+        cmd = cmd + ["-ai", "30"]
     
     print(f"Running for {l} leaves")
     
