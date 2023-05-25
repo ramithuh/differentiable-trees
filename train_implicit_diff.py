@@ -305,6 +305,16 @@ for _ in range(metadata['epochs']):
             "Seq":wandb.data_types.Plotly(new_seq),
             "last ancestor" :  wandb.data_types.Plotly(px.imshow((seqs_[-1]), text_auto=True)),
             "tLs":metadata['tLs'][0],})
+    else:
+        wandb.log(
+            {"epoch":_, 
+
+            "loss":loss,
+            "traversal cost": cost,
+            "traversal cost (surrogate)": cost_surrogate,
+            "tree force loss": tree_force_loss,
+            
+            "tLs":metadata['tLs'][0],})
 
     if(_%100==0):
         print_bold_info(f"epoch {_}")
