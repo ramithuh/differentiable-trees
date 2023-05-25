@@ -202,6 +202,8 @@ tree_params : Dict[str, Array] = {
     't': initializer(key + offset, (n_all - 1,n_ancestors), jnp.float32) 
         #jnp.zeros((n_all - 1,n_ancestors)).astype(jnp.float32)
         #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float32) 
+        #
+        #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float32) 
         #jax.random.normal(key + offset, (n_all - 1,n_ancestors)).astype(jnp.float32)
     }
 
@@ -273,13 +275,22 @@ for _ in range(metadata['epochs']):
         else:
             seqs_ = update_seq(seq_params, seqs, metadata['seq_temp'])
         new_seq = px.imshow(jnp.argmax(seqs_, axis = 2), text_auto=True)
-
-    ## Compute the loss and the metrics for loggings purposes
-    ##=> sort of forward model (using params to generate new sequences and tree)
-    #=> Compute the gradients
-    # grads = jax.grad(compute_loss)(params, seqs, base_tree, metadata, metadata['tLs'][0], _)
         
-    ## Log the metrics
+    
+    #=> Update the parameters
+    tree_params, tree_opt_state = jitted_tree_update(tree_params, tree_opt_state, tree_opt_state.aux, [seqs, metadata, metadata['tLs'][0]])
+    seq_params = tree_opt_state.aux
+
+    cost, cost_surrogate, tree_force_loss, loss = compute_detailed_loss_optimized(tree_params, seq_params, seqs, metadata, metadata['tLs'][0], sm, epoch = _)
+
+    if(cost < best_ans):
+        print_success_info("Found a better tree at epoch %d with cost %f \n" % (_, cost))
+        best_ans = cost
+        t_ = update_tree(tree_params, _, metadata['tLs'][0])
+        best_tree = discretize_tree_topology(t_,n_all)
+        best_seq = update_seq(seq_params, seqs, metadata['seq_temp'])
+        
+        ## Log the metrics
     if(_%100==0):
         wandb.log(
             {"epoch":_, 
@@ -301,19 +312,6 @@ for _ in range(metadata['epochs']):
         print("{:.3f}".format(loss.item()), end=" ")
         print("{:.3f}".format(cost.item()), end = "\n")
     
-    
-    #=> Update the parameters
-    tree_params, tree_opt_state = jitted_tree_update(tree_params, tree_opt_state, tree_opt_state.aux, [seqs, metadata, metadata['tLs'][0]])
-    seq_params = tree_opt_state.aux
-
-    cost, cost_surrogate, tree_force_loss, loss = compute_detailed_loss_optimized(tree_params, seq_params, seqs, metadata, metadata['tLs'][0], sm, epoch = _)
-
-    if(cost < best_ans):
-        print_success_info("Found a better tree at epoch %d with cost %f \n" % (_, cost))
-        best_ans = cost
-        t_ = update_tree(tree_params, _, metadata['tLs'][0])
-        best_tree = discretize_tree_topology(t_,n_all)
-        best_seq = update_seq(seq_params, seqs, metadata['seq_temp'])
 
     ### update the tree loss schedule
     if(_%metadata['tLs'][3]==0):
