@@ -9,7 +9,6 @@ The tree search is performed such that we enforce to [`tree_forcing_loss`](https
 #### Current limitations
 - convergence guarantees need to be explored
 
-
 Example experiment : https://wandb.ai/ramithx1/Differentiable-Trees/reports/Differentiable-Trees--VmlldzozMzg4MTE2?accessToken=cyle7be7zv37oxb05bdbsbqu1n3lyenrm69ly9y8swyf2s3emlt7vcy18z9zpgei
 
 ![ezgif-1-54b788b4ec](https://user-images.githubusercontent.com/3503098/213895875-989c9c49-cf7c-4f31-ab5c-68273e870c01.gif)
