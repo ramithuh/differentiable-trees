@@ -49,6 +49,7 @@ def generate_vmap_keys(seq_params):
         
     return vmap_keys
 
+@jit
 def get_one_tree_and_seq(tree_params, seq_params, pos):
     new_params = {}
     ## extract correct tree
