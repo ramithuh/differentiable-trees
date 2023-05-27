@@ -35,6 +35,7 @@ def parse_args_v2():
     parser.add_argument('-e','--epochs'      , help='# of epochs?'    , required=True, type = int)
 
     #tree and seq generate parameters
+    parser.add_argument('-ic','--init_count' , help='# of initializations to run' , required=False, type = int)
     parser.add_argument('-l','--leaves'      , help='# of leaves?'    , required=True, type = int)
     parser.add_argument('-m','--mutations'   , help='# of muations?'  , required=False, type = int)
     parser.add_argument('-sl','--seq_length' , help='length of seq'   , required=False, type = int)
