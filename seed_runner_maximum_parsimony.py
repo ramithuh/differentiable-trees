@@ -2,9 +2,9 @@ import subprocess
 import os
 import math
         
-# print("Which GPU do you want to restrict to?")
-# id = input()
-# os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
+print("Which GPU do you want to restrict to?")
+id = input()
+os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
 
 
 print("how much percentage to dedicate from gpu (eg. .90)?")
@@ -27,20 +27,20 @@ print(leaves)
 
 # Common command and arguments
 base = ["python", "train_batch_implicit_diff.py", "-nl", "20", "-m", "50", "-sl", "256", "-tLs", "[0,0.005,10,50]", "-lr", "0.1","-lr_seq", "0.01","-t", "float64-multi-init-run", "-p","Batch-Run-Maximum-Parsimony-A100-META-optimized", "-alt", "-n", "#64x META-Multi"]
-base = base + ["-g", "0", "-ic", "100"]
+base = base + ["-g", "0"]
 
 for l in leaves:
     cmd = base + ["-l", str(l)]
     
     if(l < 32):
         cmd = cmd + ["-e", "6000"]
-        cmd = cmd + ["-ai", "1"]
+        cmd = cmd + ["-ai", "1", "-ic", "100"]
     elif(l < 128):
         cmd = cmd + ["-e", "10000"]
-        cmd = cmd + ["-ai", "1"]
+        cmd = cmd + ["-ai", "1", "-ic", "50"]
     else:
-        cmd = cmd + ["-e", "25000"]
-        cmd = cmd + ["-ai", "30"]
+        cmd = cmd + ["-e", "100000"]
+        cmd = cmd + ["-ai", "1", "-ic", "25"]
     
     print(f"Running for {l} leaves")
     
