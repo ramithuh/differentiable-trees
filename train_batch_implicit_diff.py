@@ -277,7 +277,7 @@ pos = 0
 #### Training loop
 for _ in range(metadata['epochs']):
 
-    if(_%100==0):
+    if(_%200==0):
         ###~ Get the current discretized tree
         if(args['fix_tree']): 
             t_ = base_tree
@@ -305,7 +305,8 @@ for _ in range(metadata['epochs']):
     params = get_one_tree_and_seq(tree_params, seq_params, pos)
     
     if(cost.min() < best_ans):
-        print_success_info("Found a better tree at epoch %d with cost %f from tree %d. (delta at epoch = %d) \n" % (_, cost.min(), pos, cost.max()-cost.min()))
+        if(_%100==0):
+            print_success_info("Found a better tree at epoch %d with cost %f from tree %d. (delta at epoch = %d) \n" % (_, cost.min(), pos, cost.max()-cost.min()))
         best_ans = cost.min()
         
         t_ = update_tree(params, _, metadata['tLs'][0])
@@ -313,7 +314,7 @@ for _ in range(metadata['epochs']):
         best_seq = update_seq(params, seqs, metadata['seq_temp'])
         
         ## Log the metrics
-    if(_%100==0):
+    if(_%200==0):
         wandb.log(
             {"epoch":_, 
 
@@ -327,18 +328,8 @@ for _ in range(metadata['epochs']):
             "Seq":wandb.data_types.Plotly(new_seq),
             "last ancestor" :  wandb.data_types.Plotly(px.imshow((seqs_[-1]), text_auto=True)),
             "tLs":metadata['tLs'][0],})
-    else:
-        wandb.log(
-            {"epoch":_, 
 
-            "loss":loss[pos],
-            "traversal cost": cost[pos],
-            "traversal cost (surrogate)": cost_surrogate[pos],
-            "tree force loss": tree_force_loss[pos],
-            
-            "tLs":metadata['tLs'][0],})
-
-    if(_%100==0):
+    if(_%200==0):
         print_bold_info(f"epoch {_}")
         print("{:.3f}".format(metadata['tLs'][0]), end = " ")
         print("{:.3f}".format(loss[pos].item()), end=" ")

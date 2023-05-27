@@ -36,11 +36,11 @@ for l in leaves:
         cmd = cmd + ["-e", "6000"]
         cmd = cmd + ["-ai", "1", "-ic", "100"]
     elif(l < 128):
-        cmd = cmd + ["-e", "10000"]
-        cmd = cmd + ["-ai", "1", "-ic", "50"]
+        cmd = cmd + ["-e", "6000"]
+        cmd = cmd + ["-ai", "2", "-ic", "5"]
     else:
-        cmd = cmd + ["-e", "100000"]
-        cmd = cmd + ["-ai", "1", "-ic", "25"]
+        cmd = cmd + ["-e", "12000"]
+        cmd = cmd + ["-ai", "1", "-ic", "10"]
     
     print(f"Running for {l} leaves")
     
