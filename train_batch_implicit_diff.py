@@ -40,11 +40,14 @@ from modules.gt_tree_gen import *
 from modules.sankoff import *
 from arg_parser_v2 import *
 
-def combine_params(tree_params, seq_params):
-    params = {}
-    params.update(tree_params)
-    params.update(seq_params)
-    return params
+
+def generate_vmap_keys(seq_params):
+    vmap_keys = {}
+    
+    for key in seq_params.keys():
+        vmap_keys[key] = 0
+        
+    return vmap_keys
 
 def get_one_tree_and_seq(tree_params, seq_params, pos):
     new_params = {}
@@ -56,7 +59,6 @@ def get_one_tree_and_seq(tree_params, seq_params, pos):
     
     return new_params
 
-vmap_compute_detailed_loss_optimized =  vmap(compute_detailed_loss_optimized, ({'t':0}, {'0': 0, '1': 0, '2':0}, None, None, None, None, None),0)
 
 def inner_objective(seq_params, tree_params, data):
     seqs, metadata, temp = data
@@ -93,8 +95,6 @@ n_all       = n_leaves + n_ancestors
 n_mutations = int(args['mutations']) if args['mutations']!=None else 3
 n_letters   = int(args['letters']) if args['letters']!=None else 20
 
-batch = 2
-
 args['tree_loss_schedule'] = eval(args['tree_loss_schedule']) if args['tree_loss_schedule']!=None else [0,0.01,100,5]
  
 metadata = {
@@ -111,7 +111,8 @@ metadata = {
     'lr': args['learning_rate'],
     'lr_seq' : args['learning_rate_seq'] if args['learning_rate_seq']!=None else args['learning_rate']*10,
     'epochs': args['epochs'],
-    'tLs': args['tree_loss_schedule'] #tree loss schedule
+    'tLs': args['tree_loss_schedule'],
+    'init_count' : args['init_count'] if args['init_count']!=None else 1,
     }
 
 wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
@@ -211,7 +212,7 @@ initializer = jax.nn.initializers.orthogonal()
 
 
 tree_params : Dict[str, Array] = {
-    't': initializer(key + offset, (batch, n_all - 1,n_ancestors), jnp.float64)
+    't': initializer(key + offset, (metadata['init_count'], n_all - 1,n_ancestors), jnp.float64)
         #jnp.zeros((n_all - 1,n_ancestors)).astype(jnp.float64)
         #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float64) 
         #
@@ -237,7 +238,7 @@ for i in range(0, n_ancestors):
             print_critical_info("Initializing sequences using sankoff ancestors \n")
             seq_params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.float64)*100
     else:
-        seq_params[str(i)] = initializer(key+i+offset, (batch, seq_length, n_letters), jnp.float64)
+        seq_params[str(i)] = initializer(key+i+offset, (metadata['init_count'], seq_length, n_letters), jnp.float64)
         #jax.random.normal(key+i+offset, (seq_length, n_letters)).astype(jnp.float64)
     
 #### Initialize the optimizer
@@ -253,19 +254,17 @@ tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8, e
 
 vmap_tree_init = jax.vmap(tree_optimizer.init_state, (0, 0, None),0)
 tree_opt_state = vmap_tree_init(tree_params, seq_params, [seqs, metadata, metadata['tLs'][0]])
-jitted_tree_update = vmap(tree_optimizer.update, (0, 0, 0, None),0)
+jitted_tree_update = jit(vmap(tree_optimizer.update, (0, 0, 0, None),0))
+
+vmap_keys = generate_vmap_keys(seq_params)
+vmap_compute_detailed_loss_optimized =  jit(vmap(compute_detailed_loss_optimized, ({'t':0}, vmap_keys, None, None, None, None, None),0))
+
 
 fixed_dummy_pos = 0 
 
 params = get_one_tree_and_seq(tree_params, seq_params, fixed_dummy_pos)
-# params = combine_params(tree_params[fixed_dummy_pos], seq_params[fixed_dummy_pos])
-
-
-
 
 fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params), n_all),n_leaves, True)
-
-
 
 compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 
@@ -306,7 +305,7 @@ for _ in range(metadata['epochs']):
     params = get_one_tree_and_seq(tree_params, seq_params, pos)
     
     if(cost.min() < best_ans):
-        print_success_info("Found a better tree at epoch %d with cost %f \n" % (_, cost.min()))
+        print_success_info("Found a better tree at epoch %d with cost %f from tree %d \n" % (_, cost.min(), pos))
         best_ans = cost.min()
         
         t_ = update_tree(params, _, metadata['tLs'][0])
@@ -351,7 +350,7 @@ for _ in range(metadata['epochs']):
         metadata['tLs'][0] = min(metadata['tLs'][2], metadata['tLs'][0] + metadata['tLs'][1])
         
 print_success_info("Optimization done!\n")
-print_success_info("Final cost: {:.5f}\n".format(cost))
+print_success_info("Final cost: {:.5f}\n".format(cost[pos]))
 print_success_info("Best cost encountered: {:.5f}\n".format(best_ans))
 
 if(args['fix_tree']):
