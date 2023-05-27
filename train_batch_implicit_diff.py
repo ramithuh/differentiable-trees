@@ -61,25 +61,25 @@ def get_one_tree_and_seq(tree_params, seq_params, pos):
 
 
 def inner_objective(seq_params, tree_params, data):
-    seqs, metadata, temp = data
-    return compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp)
+    seqs, metadata, temp, epoch = data
+    return compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp, epoch)
 
 
 def inner_loop_solver(seq_params, tree_params, data):
-    seqs, metadata, temp = data
+    seqs, metadata, temp, epoch = data
     
-    inner_opt_state = seq_optimizer.init_state(seq_params, tree_params, [seqs, metadata, metadata['tLs'][0]])
+    inner_opt_state = seq_optimizer.init_state(seq_params, tree_params, data)
 
     for i in range(0, seq_optimizer.maxiter):
-        seq_params, inner_opt_state = jitted_seq_update(seq_params, inner_opt_state, tree_params, [seqs, metadata, metadata['tLs'][0]])
+        seq_params, inner_opt_state = jitted_seq_update(seq_params, inner_opt_state, tree_params, data)
 
     return seq_params
 
 
 def outer_objective(tree_params, seq_params, data):
-    seqs, metadata, temp = data
-    seq_params = inner_loop_solver(seq_params, tree_params, [seqs, metadata, metadata['tLs'][0]])
-    return compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp), seq_params
+    seqs, metadata, temp, epoch = data
+    seq_params = inner_loop_solver(seq_params, tree_params, data)
+    return compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp, epoch), seq_params
 
 
 
@@ -250,10 +250,9 @@ seq_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'], eps_root = 1e-8
 jitted_seq_update = jax.jit(seq_optimizer.update)
 
 tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8, eps = 1e-8), fun = outer_objective, has_aux = True) #, implicit_diff = True)
-#tree_opt_state = tree_optimizer.init_state(tree_params, seq_params, [seqs, metadata, metadata['tLs'][0]])
 
 vmap_tree_init = jax.vmap(tree_optimizer.init_state, (0, 0, None),0)
-tree_opt_state = vmap_tree_init(tree_params, seq_params, [seqs, metadata, metadata['tLs'][0]])
+tree_opt_state = vmap_tree_init(tree_params, seq_params, [seqs, metadata, metadata['tLs'][0], 0])
 jitted_tree_update = jit(vmap(tree_optimizer.update, (0, 0, 0, None),0))
 
 vmap_keys = generate_vmap_keys(seq_params)
@@ -296,7 +295,7 @@ for _ in range(metadata['epochs']):
         
     
     #=> Update the parameters
-    tree_params, tree_opt_state = jitted_tree_update(tree_params, tree_opt_state, tree_opt_state.aux, [seqs, metadata, metadata['tLs'][0]])
+    tree_params, tree_opt_state = jitted_tree_update(tree_params, tree_opt_state, tree_opt_state.aux, [seqs, metadata, metadata['tLs'][0],_])
     seq_params = tree_opt_state.aux
 
     cost, cost_surrogate, tree_force_loss, loss = vmap_compute_detailed_loss_optimized(tree_params, seq_params, seqs, metadata, metadata['tLs'][0], sm,  _)
@@ -364,7 +363,7 @@ else:
     target_cost = 0
 
 
-if(abs(target_cost - cost) == 0):
+if(abs(target_cost - best_ans) == 0):
     print_success_info("Optimization succeeded! Reached groundtruth 🚀\n")
     wandb.log({"success":True, "Error" : 0})
 else:
