@@ -214,6 +214,8 @@ initializer = jax.nn.initializers.kaiming_normal()
 
 tree_params : Dict[str, Array] = {
     't': initializer(key + offset, (metadata['init_count'], n_all - 1,n_ancestors), jnp.float64)
+        #
+        # 
         #jnp.zeros((n_all - 1,n_ancestors)).astype(jnp.float64)
         #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float64) 
         #
@@ -247,10 +249,10 @@ for i in range(0, n_ancestors):
 copy_seq_params = seq_params.copy()
 #eps_root = 1e-8, eps = 1e-8
 
-seq_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'], eps_root = 1e-8, eps = 1e-8), fun = inner_objective, maxiter  = args['alternate_interval'], implicit_diff = True) 
+seq_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'], eps_root = 1e-16), fun = inner_objective, maxiter  = args['alternate_interval'], implicit_diff = True) 
 jitted_seq_update = jax.jit(seq_optimizer.update)
 
-tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-8, eps = 1e-8), fun = outer_objective, has_aux = True) #, implicit_diff = True)
+tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-16), fun = outer_objective, has_aux = True) #, implicit_diff = True)
 
 vmap_tree_init = jax.vmap(tree_optimizer.init_state, (0, 0, None),0)
 tree_opt_state = vmap_tree_init(tree_params, seq_params, [seqs, metadata, metadata['tLs'][0], 0])
