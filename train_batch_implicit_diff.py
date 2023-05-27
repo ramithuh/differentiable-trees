@@ -206,7 +206,8 @@ if(args['groundtruth']):
 
 
 #### Define parameters (t and the ancestor sequences)
-initializer = jax.nn.initializers.orthogonal()
+initializer = jax.nn.initializers.kaiming_normal()
+#jax.nn.initializers.orthogonal()
 #jax.nn.initializers.kaiming_normal()
 #jax.nn.initializers.orthogonal()
 
@@ -304,7 +305,7 @@ for _ in range(metadata['epochs']):
     params = get_one_tree_and_seq(tree_params, seq_params, pos)
     
     if(cost.min() < best_ans):
-        print_success_info("Found a better tree at epoch %d with cost %f from tree %d \n" % (_, cost.min(), pos))
+        print_success_info("Found a better tree at epoch %d with cost %f from tree %d. (delta at epoch = %d) \n" % (_, cost.min(), pos, cost.max()-cost.min()))
         best_ans = cost.min()
         
         t_ = update_tree(params, _, metadata['tLs'][0])

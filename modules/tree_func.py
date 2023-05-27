@@ -1,10 +1,8 @@
 import jax
 import jax.nn as nn
 import jax.numpy as jnp
-import numpy as np
 import matplotlib.pyplot as plt
 
-import numpy as np
 import jax.scipy.linalg as slin
 import jax.numpy.linalg as la
 
@@ -51,14 +49,16 @@ def update_tree(params : Dict[str, Array], epoch : int = 0 ,  temp : Float = 1 )
             t : updated soft tree topology
                 t -> (n_nodes, n_nodes)
     '''
-    n_all = params['t'].shape[0] + 1 #(adding +1 because params doesn't have the root node)
-    n_ancestors = params['t'].shape[1]
+    tree = params['t']#.sum(axis = 0)
+    
+    n_all = tree.shape[0] + 1 #(adding +1 because params doesn't have the root node)
+    n_ancestors = tree.shape[1]
     n_leaves = n_all - n_ancestors
     
     key = jax.random.PRNGKey(epoch) # generate a random key
-    gumbel_noise = jax.random.gumbel(key, (params['t'].shape[0], params['t'].shape[1])) # generate gumbel noise
+    gumbel_noise = jax.random.gumbel(key, (tree.shape[0], tree.shape[1])) # generate gumbel noise
 
-    perturbed_tree_params = params['t'] + gumbel_noise*0.2 # add gumbel noise to the tree params
+    perturbed_tree_params = tree + gumbel_noise*0.0 # add gumbel noise to the tree params
 
     inf_matrix = -jnp.ones((n_all, n_all))*jnp.inf
                     
@@ -267,7 +267,7 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
     return loss
 
 @jit
-def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], metadata : Dict, temp : Float, epoch : int = 0) -> Float:
+def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], metadata : Dict, temp : Float, epoch : int) -> Float:
     """Computes the total loss for a given set of sequences and a tree
 
     Args:
