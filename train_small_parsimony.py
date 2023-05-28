@@ -278,7 +278,7 @@ for _ in range(metadata['epochs']):
     
     if(cost.min() < best_ans):
         if(_%100==0):
-            print_success_info("Found a better tree at epoch %d with cost %f from tree %d. (delta at epoch = %d) \n" % (_, cost.min(), pos, cost.max()-cost.min()))
+            print_success_info("Found a better seq at epoch %d with cost %f from seq %d. (delta at epoch = %d) \n" % (_, cost.min(), pos, cost.max()-cost.min()))
         best_ans = cost.min()
         
         t_ = update_tree(params, _, metadata['tLs'][0])
