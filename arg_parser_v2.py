@@ -50,6 +50,9 @@ def parse_args_v2():
     ## what to train?
     parser.add_argument('-fs', '--fix_seqs', action='store_true', help='Fix sequences when training ?')
     parser.set_defaults(fix_seqs=False)
+    
+    parser.add_argument('-w', '--log_wandb', action='store_true', help='Log experiments to wandb?')
+    parser.set_defaults(log_wandb=False)
 
     parser.add_argument('-shs', '--shuffle_seqs', action='store_true', help='Shuffle groundtruth sequences?')
     parser.set_defaults(shuffle_seqs=False)
