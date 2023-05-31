@@ -215,13 +215,6 @@ initializer = jax.nn.initializers.kaiming_normal()
 
 tree_params : Dict[str, Array] = {
     't': initializer(key + offset, (metadata['init_count'], n_all - 1,n_ancestors), jnp.float64)
-        #
-        # 
-        #jnp.zeros((n_all - 1,n_ancestors)).astype(jnp.float64)
-        #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float64) 
-        #
-        #initializer(key + offset, (n_all - 1,n_ancestors), jnp.float64) 
-        #jax.random.normal(key + offset, (n_all - 1,n_ancestors)).astype(jnp.float64)
     }
 
 seq_params : Dict[str, Array] = {}
