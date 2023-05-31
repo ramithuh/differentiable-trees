@@ -21,7 +21,7 @@ print("ok will run for the following leaf complexities:")
 print(leaves)
 
 # Common command and arguments
-base = ["python", "train.py", "-nl", "20", "-m", "50", "-sl", "256", "-tLs", "[0,0.01,100,3]", "-lr", "0.01", "-n", "Batch Run", "-ft", "-t", "small_parsimony", "-p","Batch-Run-Small-Parsimony-A100-triu", "-e", "5000"]
+base = ["python", "train_small_parsimony.py", "-nl", "20", "-m", "50", "-sl", "256", "-tLs", "[0,0.01,100,3]", "-lr", "0.1","-lr_seq", "0.01", "-n", "Small Parsimony Run", "-ft", "-t", "small_parsimony", "-p","Batch-Run-Maximum-Parsimony-A100-META-optimized", "-e", "5000", "-ic", "10"]
 base = base + ["-g", "0"]
 
 for l in leaves:
