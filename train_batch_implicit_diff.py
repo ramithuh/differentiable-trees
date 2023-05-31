@@ -208,9 +208,6 @@ if(args['groundtruth']):
 
 #### Define parameters (t and the ancestor sequences)
 initializer = jax.nn.initializers.kaiming_normal()
-#jax.nn.initializers.orthogonal()
-#jax.nn.initializers.kaiming_normal()
-#jax.nn.initializers.orthogonal()
 
 
 tree_params : Dict[str, Array] = {
