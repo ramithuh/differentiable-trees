@@ -118,7 +118,7 @@ metadata = {
 
 if(args['log_wandb']):
     wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
-    wandb.init(project=args['project'], name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order", args['tags']], notes = args['notes'])
+    wandb.init(project=args['project'], name = args['notes'] + metadata['exp_name'], entity="<your_username>", config = metadata, tags=["bi-level", args['tags']], notes = args['notes'])
 
 if(args['gpu']!=None):
     print_critical_info(f"Utilizing gpu -> {args['gpu']} \n")

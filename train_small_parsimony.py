@@ -97,8 +97,9 @@ metadata = {
     'init_count' : args['init_count'] if args['init_count']!=None else 1,
     }
 
-wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
-wandb.init(project=args['project'], name = args['notes'] + metadata['exp_name'], entity="ramithx1", config = metadata, tags=["FASRC","Fixed Groundtruth", "Fixed GT Seqs Order", args['tags']], notes = args['notes'])
+if(args['log_wandb']):
+    wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
+    wandb.init(project=args['project'], name = args['notes'] + metadata['exp_name'], entity="<your_username>", config = metadata, tags=["small_parsimony", args['tags']], notes = args['notes'])
 
 if(args['gpu']!=None):
     print_critical_info(f"Utilizing gpu -> {args['gpu']} \n")
@@ -153,12 +154,13 @@ if(args['groundtruth']):
         _, _, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
         print("done running sankoff on groundtruth tree")
         
-        wandb.log(
-            {
-                #'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
-                'sankoff_cost': sankoff_cost,
-                #'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.float64), tree, metadata, surrogate_loss = False)
-            })
+        if(args['log_wandb']):
+            wandb.log(
+                {
+                    #'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
+                    'sankoff_cost': sankoff_cost,
+                    #'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.float64), tree, metadata, surrogate_loss = False)
+                })
         
     if(args['shuffle_seqs']):        
         shuffled_leaves = jax.random.permutation(key, seqs[0:n_leaves], independent=False) 
@@ -176,15 +178,16 @@ if(args['groundtruth']):
     
     gt_tree_force_loss = enforce_graph(tree, 10, metadata)
 
-    wandb.log({
-        "Groundtruth Tree" : wandb.Image(gt_tree),
-        "Groundtruth Seq" : wandb.data_types.Plotly(gt_seqs_plot),
+    if(args['log_wandb']):
+        wandb.log({
+            "Groundtruth Tree" : wandb.Image(gt_tree),
+            "Groundtruth Seq" : wandb.data_types.Plotly(gt_seqs_plot),
 
-        "Groundtruth Tree Force Loss" : gt_tree_force_loss,
-        "Groundtruth Traversal Cost (surrogate)" : gt_cost_surrogate,
-        "Groundtruth Traversal Cost" : gt_cost,
-        "Groundtruth Total Loss" : gt_tree_force_loss + gt_cost
-        })
+            "Groundtruth Tree Force Loss" : gt_tree_force_loss,
+            "Groundtruth Traversal Cost (surrogate)" : gt_cost_surrogate,
+            "Groundtruth Traversal Cost" : gt_cost,
+            "Groundtruth Total Loss" : gt_tree_force_loss + gt_cost
+            })
 
 
 #### Define parameters (t and the ancestor sequences)
@@ -286,7 +289,7 @@ for _ in range(metadata['epochs']):
         best_seq = update_seq(params, seqs, metadata['seq_temp'])
         
         ## Log the metrics
-    if(_%200==0):
+    if(_%200==0 and args['log_wandb']):
         wandb.log(
             {"epoch":_, 
 
@@ -329,18 +332,19 @@ else:
 
 if(abs(target_cost - best_ans) == 0):
     print_success_info("Optimization succeeded! Reached groundtruth 🚀\n")
-    wandb.log({"success":True, "Error" : 0})
+    if(args['log_wandb']) : wandb.log({"success":True, "Error" : 0})
 else:
-    wandb.log({"success":False, "Error" : (best_ans - sankoff_cost)})
+    if(args['log_wandb']) : wandb.log({"success":False, "Error" : (best_ans - sankoff_cost)})
 
 best_tree_img = show_graph_with_labels(best_tree, n_leaves, True)
 best_tree_adj = px.imshow(best_tree, text_auto=True)
 
-wandb.log({
-        "best cost":best_ans, 
-        "best_tree_adj" : wandb.data_types.Plotly(best_tree_adj),
-        "best_tree" : wandb.Image(best_tree_img),
-        "best_seq" : wandb.data_types.Plotly(px.imshow(jnp.argmax(best_seq, axis = 2), text_auto=True))
-           })
+if(args['log_wandb']):
+    wandb.log({
+            "best cost":best_ans, 
+            "best_tree_adj" : wandb.data_types.Plotly(best_tree_adj),
+            "best_tree" : wandb.Image(best_tree_img),
+            "best_seq" : wandb.data_types.Plotly(px.imshow(jnp.argmax(best_seq, axis = 2), text_auto=True))
+            })
 
-wandb.finish()
+    wandb.finish()
