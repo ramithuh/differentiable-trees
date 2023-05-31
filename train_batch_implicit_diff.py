@@ -169,9 +169,9 @@ if(args['groundtruth']):
         ## This will help us to see whether there's a better groundtruth ancestors for this tree
         cost_mat = (jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)).astype(jnp.float64)
         
-        print("running sankoff on groundtruth tree")
+        print_critical_info("running sankoff on groundtruth tree\n")
         _, _, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
-        print("done running sankoff on groundtruth tree")
+        print_success_info("done running sankoff on groundtruth tree. optimal cost = %d\n" % sankoff_cost)
         
         
         if(args['log_wandb']):
