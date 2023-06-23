@@ -2,9 +2,14 @@ import subprocess
 import os
 import math
         
-print("Which GPU do you want to restrict to?")
-id = input()
-os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
+# print("Which GPU do you want to restrict to?")
+# id = input()
+# os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
+
+
+print("how much percentage to dedicate from gpu (eg. .90)?")
+percentage = input()
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = percentage
 
 
 print("how much percentage to dedicate from gpu (eg. .90)?")
