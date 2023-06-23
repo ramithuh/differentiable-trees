@@ -250,7 +250,7 @@ pos = 0
 #### Training loop
 for _ in range(metadata['epochs']):
 
-    if(_%200==0):
+    if(_%10==0):
         ###~ Get the current discretized tree
         if(args['fix_tree']): 
             t_ = base_tree
@@ -286,7 +286,7 @@ for _ in range(metadata['epochs']):
         best_seq = update_seq(params, seqs, metadata['seq_temp'])
         
         ## Log the metrics
-    if(_%200==0):
+    if(_%10==0):
         wandb.log(
             {"epoch":_, 
 

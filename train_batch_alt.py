@@ -237,7 +237,7 @@ vmap_seq_init = jax.vmap(seq_optimizer.init_state, (0, 0, None),0)
 seq_opt_state = vmap_seq_init(seq_params, tree_params, [seqs, metadata, metadata['tLs'][0], 0])
 jitted_seq_update = jit(vmap(seq_optimizer.update, (0, 0, 0, None),0))
 
-tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr']), fun = outer_objective) #, implicit_diff = True)
+tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr']), fun = outer_objective, maxiter  = args['alternate_interval']) #, implicit_diff = True)
 vmap_tree_init = jax.vmap(tree_optimizer.init_state, (0, 0, None),0)
 tree_opt_state = vmap_tree_init(tree_params, seq_params, [seqs, metadata, metadata['tLs'][0], 0])
 jitted_tree_update = jit(vmap(tree_optimizer.update, (0, 0, 0, None),0))
