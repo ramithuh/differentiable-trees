@@ -26,7 +26,7 @@ print("ok will run for the following leaf complexities:")
 print(leaves)
 
 # Common command and arguments
-base = ["python", "train_batch_implicit_diff.py", "-nl", "20", "-m", "50", "-sl", "256", "-tLs", "[0,0.005,10,50]", "-lr", "0.1","-lr_seq", "0.01","-t", "float64-multi-init-run", "-p","Batch-Run-Maximum-Parsimony-A100-META-optimized", "-alt", "-n", "Final Run"]
+base = ["python", "train_batch_implicit_diff.py", "-nl", "20", "-m", "30", "-sl", "256", "-tLs", "[0,0.005,10,50]", "-lr", "0.1","-lr_seq", "0.01","-t", "float64-multi-init-run", "-p","Batch-Run-Maximum-Parsimony-A100-META-optimized", "-alt", "-n", "Low mutations Run"]
 base = base + ["-g", "0"]
 
 for l in leaves:
