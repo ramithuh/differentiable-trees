@@ -71,11 +71,9 @@ def update_tree(params : Dict[str, Array], epoch : int = 0 ,  temp : Float = 1 )
     inf_matrix = inf_matrix.at[:n_ancestors, n_leaves:].set(perturbed_tree_params[:n_ancestors])
     inf_matrix = inf_matrix.at[shifted_upper_indices].set(perturbed_tree_params[n_ancestors:, :][upper_indices])
     
-    #lower_indices_ = 0
-    #perturbed_tree_params[n_ancestors:, :][lower_indices]
-    #-1e10*(temp/5) + 
+    lower_triangle_values = perturbed_tree_params[n_ancestors:, :][lower_indices]
     
-    #inf_matrix = inf_matrix.at[shifted_lower_indices].set(lower_indices_)
+    inf_matrix = inf_matrix.at[shifted_lower_indices].set(lower_triangle_values)
     inf_matrix = inf_matrix.at[-1,-1].set(1)
     
     return jax.nn.softmax(inf_matrix, axis = 1)
@@ -156,6 +154,36 @@ def update_seq(params : Dict[str, Array], seqs : Float[Array, "nodes letters"], 
 #     seqs = seqs.at[-1].set(seq_2)
     
     return seqs
+
+@jit
+def entropy_loss(t_ : Float[Array, "nodes nodes"]) -> List[Float]:
+    '''
+        Pushes the nevada constraint on the relaxed adjacency matrix
+    '''
+    
+    n_all = t_.shape[0]
+    n_leaves = (n_all + 1)//2
+    n_ancestors = n_all - n_leaves
+    
+    # generating the upper indices of the lower square matrix
+    upper_indices = jnp.triu_indices(n_ancestors)
+    lower_indices = jnp.tril_indices(n_ancestors)
+    shifted_upper_indices = (upper_indices[0] + n_ancestors, upper_indices[1] + n_leaves )
+    shifted_lower_indices = (lower_indices[0] + n_leaves, lower_indices[1] + n_leaves )
+    
+    blank = jnp.zeros((n_ancestors,n_ancestors))
+
+    lower_triangle_values = t_[shifted_lower_indices]
+    mat_1 = blank.at[lower_indices].set(lower_triangle_values)
+
+    uppper_triangle_values = t_[shifted_upper_indices]
+    mat_2 = blank.at[upper_indices].set(uppper_triangle_values)
+    
+    prob_vector = mat_2[1:].sum(axis = 1)
+
+    cross_entropy_loss = -jnp.sum(1 * jnp.log(prob_vector))
+    
+    return cross_entropy_loss
 
 @jit
 def enforce_graph(t_ : Float[Array, "nodes nodes"], s : Float, metadata = None, verbose = False) -> List[Float]:
@@ -301,7 +329,9 @@ def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str
 
     tree_force_loss = enforce_graph(t_,10,metadata)
     
-    loss = cost_surrogate + temp*(tree_force_loss)
+    cross_entropy_loss = entropy_loss(t_)
+    
+    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
 
     return loss
 
@@ -331,12 +361,13 @@ def compute_detailed_loss_optimized(tree_params : Dict[str, Array], seq_params :
     cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
 
     tree_force_loss = enforce_graph(t_,10,metadata)
+    cross_entropy_loss = entropy_loss(t_)
     
-    loss = cost_surrogate + temp*(tree_force_loss)
+    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
 
     cost = compute_cost(seqs_,t_, sm) # real traversal cost
 
-    return cost, cost_surrogate, tree_force_loss, loss
+    return cost, cost_surrogate, tree_force_loss, cross_entropy_loss, loss
 
 @jax.jit
 def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
