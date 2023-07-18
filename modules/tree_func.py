@@ -63,11 +63,19 @@ def update_tree(params : Dict[str, Array], epoch : int = 0 ,  temp : Float = 1 )
     inf_matrix = -jnp.ones((n_all, n_all))*jnp.inf
                     
     # generating the upper indices of the lower square matrix
-    lower_indices = jnp.triu_indices(n_ancestors)
-    shifted_lower_indices = (lower_indices[0] + n_ancestors, lower_indices[1] + n_leaves )
+    upper_indices = jnp.triu_indices(n_ancestors)
+    lower_indices = jnp.tril_indices(n_ancestors)
+    shifted_upper_indices = (upper_indices[0] + n_ancestors, upper_indices[1] + n_leaves )
+    shifted_lower_indices = (lower_indices[0] + n_leaves, lower_indices[1] + n_leaves )
 
     inf_matrix = inf_matrix.at[:n_ancestors, n_leaves:].set(perturbed_tree_params[:n_ancestors])
-    inf_matrix = inf_matrix.at[shifted_lower_indices].set(perturbed_tree_params[n_ancestors:, :][lower_indices])
+    inf_matrix = inf_matrix.at[shifted_upper_indices].set(perturbed_tree_params[n_ancestors:, :][upper_indices])
+    
+    #lower_indices_ = 0
+    #perturbed_tree_params[n_ancestors:, :][lower_indices]
+    #-1e10*(temp/5) + 
+    
+    #inf_matrix = inf_matrix.at[shifted_lower_indices].set(lower_indices_)
     inf_matrix = inf_matrix.at[-1,-1].set(1)
     
     return jax.nn.softmax(inf_matrix, axis = 1)
