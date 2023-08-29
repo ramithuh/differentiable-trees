@@ -1,10 +1,8 @@
 import jax
 import jax.nn as nn
 import jax.numpy as jnp
-import numpy as np
 import matplotlib.pyplot as plt
 
-import numpy as np
 import jax.scipy.linalg as slin
 import jax.numpy.linalg as la
 
@@ -35,45 +33,50 @@ def discretize_tree_topology(tree : Float[Array, "nodes nodes"], n_nodes : int) 
     return t_q
 
 @jit
-def update_tree(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes"], epoch : int = 0 ) -> Float[Array, "nodes nodes"]:
+def update_tree(params : Dict[str, Array], epoch : int = 0 ,  temp : Float = 1 ) -> Float[Array, "nodes nodes"]:
     '''
         Uses base_tree and returns the updated soft tree topology
         Particularly updates the ancestor probabilities in the trees
 
         Args:
             params : params['t'] denotes the trainable params; (ancestors)
-                     params['t'] -> (n_nodes, n_ancestors)
+                     params['t'] -> (n_nodes-1, n_ancestors)
 
-            base_tree : base tree topology
-                        base_tree -> (n_nodes, n_nodes)
+            epoch : epoch number
+            temp : temperature for softmax
+            
         Returns:
             t : updated soft tree topology
                 t -> (n_nodes, n_nodes)
     '''
-
-    n_leaves = (base_tree.shape[1] - params['t'].shape[1])
-    key = jax.random.PRNGKey(epoch)
-        
-    # t_softmax = nn.softmax(,axis=1)
-    t = base_tree.at[0:-1,n_leaves:].set(params['t']) # set the params['t'] to the ancestors
-    t = t.at[:,:].set(jnp.triu(t,1)) ## enforce upper triangularity (above main diagonal)
-
-    #custom softmax over the topologically ordered ancestors
-    for i in range(0, t.shape[0]-1): ## loop until last node (excluding root)
-        pos = max(i+1, n_leaves)
-        
-        gumbel_noise = 0 #jax.random.gumbel(key, (t.shape[1]-pos,)) 
-        #key, _ = jax.random.split(key)
-        noisy_t = t[i, pos:] + gumbel_noise
-
-        ## softmax over the topologically ordered ancestors 
-        prob = jax.nn.softmax(noisy_t) # nn.softmax(t[i, pos:])
-
-        t = t.at[i, pos:].set(prob)
+    tree = params['t']#.sum(axis = 0)
     
-    t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself. i.e. root) 
+    n_all = tree.shape[0] + 1 #(adding +1 because params doesn't have the root node)
+    n_ancestors = tree.shape[1]
+    n_leaves = n_all - n_ancestors
     
-    return t
+    key = jax.random.PRNGKey(epoch) # generate a random key
+    gumbel_noise = jax.random.gumbel(key, (tree.shape[0], tree.shape[1])) # generate gumbel noise
+
+    perturbed_tree_params = tree + gumbel_noise*0.0 # add gumbel noise to the tree params
+
+    inf_matrix = -jnp.ones((n_all, n_all))*jnp.inf
+                    
+    # generating the upper indices of the lower square matrix
+    upper_indices = jnp.triu_indices(n_ancestors)
+    lower_indices = jnp.tril_indices(n_ancestors)
+    shifted_upper_indices = (upper_indices[0] + n_ancestors, upper_indices[1] + n_leaves )
+    shifted_lower_indices = (lower_indices[0] + n_leaves, lower_indices[1] + n_leaves )
+
+    inf_matrix = inf_matrix.at[:n_ancestors, n_leaves:].set(perturbed_tree_params[:n_ancestors])
+    inf_matrix = inf_matrix.at[shifted_upper_indices].set(perturbed_tree_params[n_ancestors:, :][upper_indices])
+    
+    lower_triangle_values = perturbed_tree_params[n_ancestors:, :][lower_indices]
+    
+    inf_matrix = inf_matrix.at[shifted_lower_indices].set(lower_triangle_values)
+    inf_matrix = inf_matrix.at[-1,-1].set(1)
+    
+    return jax.nn.softmax(inf_matrix, axis = 1)
 
 @jit
 def update_tree_sankoff(params : Dict[str, Array], base_tree : Float[Array, "nodes nodes"], epoch : int = 0 ) -> Float[Array, "nodes nodes"]:
@@ -95,6 +98,20 @@ def update_tree_sankoff(params : Dict[str, Array], base_tree : Float[Array, "nod
     n_leaves = (base_tree.shape[1] - params['t'].shape[1])
     
     t = base_tree.at[0:-1,n_leaves:].set(params['t'])
+    t = t.at[:,:].set(abs(jnp.triu(t,1))) ## enforce upper triangularity (above main diagonal)
+    
+    # #custom softmax over the topologically ordered ancestors
+    # for i in range(0, t.shape[0]-1): ## loop until last node (excluding root)
+    #     pos = max(i+1, n_leaves)
+        
+    #     noisy_t = t[i, pos:]
+
+    #     ## softmax over the topologically ordered ancestors 
+    #     prob = noisy_t #jax.nn.softmax(noisy_t) # nn.softmax(t[i, pos:])
+
+    #     t = t.at[i, pos:].set(prob)
+    
+    
     t = t.at[-1,-1].set(1) ### need to add this (so that the last sequence is matched with itself. i.e. root) 
     
     return t
@@ -118,7 +135,7 @@ def update_seq(params : Dict[str, Array], seqs : Float[Array, "nodes letters"], 
         # print(params[key].shape)
         # print(seq.shape)
         # break
-        seq      = nn.softmax(temperature*params[key])
+        seq      = nn.softmax(params[key]*temperature)
         #hard_seq = (seq > 0.5).astype(int)
         
         seqs = seqs.at[- n_leaves + i + 1].set(seq)
@@ -137,6 +154,36 @@ def update_seq(params : Dict[str, Array], seqs : Float[Array, "nodes letters"], 
 #     seqs = seqs.at[-1].set(seq_2)
     
     return seqs
+
+@jit
+def entropy_loss(t_ : Float[Array, "nodes nodes"]) -> List[Float]:
+    '''
+        Pushes the nevada constraint on the relaxed adjacency matrix
+    '''
+    
+    n_all = t_.shape[0]
+    n_leaves = (n_all + 1)//2
+    n_ancestors = n_all - n_leaves
+    
+    # generating the upper indices of the lower square matrix
+    upper_indices = jnp.triu_indices(n_ancestors)
+    lower_indices = jnp.tril_indices(n_ancestors)
+    shifted_upper_indices = (upper_indices[0] + n_ancestors, upper_indices[1] + n_leaves )
+    shifted_lower_indices = (lower_indices[0] + n_leaves, lower_indices[1] + n_leaves )
+    
+    blank = jnp.zeros((n_ancestors,n_ancestors))
+
+    lower_triangle_values = t_[shifted_lower_indices]
+    mat_1 = blank.at[lower_indices].set(lower_triangle_values)
+
+    uppper_triangle_values = t_[shifted_upper_indices]
+    mat_2 = blank.at[upper_indices].set(uppper_triangle_values)
+    
+    prob_vector = mat_2[1:].sum(axis = 1)
+
+    cross_entropy_loss = -jnp.sum(1 * jnp.log(prob_vector))
+    
+    return cross_entropy_loss
 
 @jit
 def enforce_graph(t_ : Float[Array, "nodes nodes"], s : Float, metadata = None, verbose = False) -> List[Float]:
@@ -162,23 +209,40 @@ def enforce_graph(t_ : Float[Array, "nodes nodes"], s : Float, metadata = None, 
     # n_leaves = metadata['n_leaves']
     # n_ancestors = metadata['n_ancestors']
 
-    tree_force_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(t_[:-1, n_all - n_ancestors: n_all], axis = 0) - 2),2))
-    
-    loop_loss = 0 #jnp.multiply(jnp.identity(n_all-1), t_[:-1,:-1]).sum()*100  ## penalize self connections
-    
-    bidirection_loss = 0 #jnp.sum(jnp.matmul(t_,t_)*jnp.identity(t_.shape[0]))*100 ## penalize bidirectional connections
+
+    ancestor_columns = t_[:-1, n_all - n_ancestors: n_all]
+    # scaling_vecotr = 
+
+    tree_force_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(ancestor_columns, axis = 0) - 2),2))
     
     if(verbose):
         print("bifurcating tree_forcing_loss = ", tree_force_loss)
-        print("self loop_loss = ", loop_loss)
-        print("bidirectional loss = ", bidirection_loss)
+
+    return tree_force_loss
+
+@jit
+def compute_surrogate_cost(sequences : Float[Array, "nodes seq_length letters"], tree : Float[Array, "nodes nodes"]) -> Float:
+    '''
+    This is an approximation of the traversal cost, because seq_onehot is soft 
+    '''
     
-    return tree_force_loss, loop_loss, bidirection_loss
+    seq_onehot = jnp.transpose(sequences, (2,0,1)) # bring onehot encoding to the front (onehot, n_all, seq_length)
+    sel        = jnp.expand_dims(tree, axis = 0)   # make it (1, n_all, n_all)
 
+    selection  = jnp.matmul(sel, seq_onehot)
+    
 
-def compute_cost(sequences : Float[Array, "nodes seq_length letters"], tree : Float[Array, "nodes nodes"], metadata, verbose = False, surrogate_loss = True) -> Float:
+    out = jnp.transpose(selection, (1,2,0))
+    ans = (jnp.sum(abs((out - sequences)), axis = [1,2])/(2)).sum()
+    
+    return ans
+
+@jit
+def compute_cost(sequences : Float[Array, "nodes seq_length letters"], tree : Float[Array, "nodes nodes"], sm) -> Float:
     '''
         compute the traversal cost (character level changes while traversing the tree)
+        This is the exact traversal cost, but it is not differentiable.
+        similarity matrix is assumed to be a 1s matrix with 0s on the diagonal
 
         Args:
             sequences : one-hot encoded sequences
@@ -189,162 +253,12 @@ def compute_cost(sequences : Float[Array, "nodes seq_length letters"], tree : Fl
         Returns: 
             ans : traversal cost
     '''
-    # tree = tree.at[-1,-1].set(1)
+    selection_ = jnp.matmul(discretize_tree_topology(tree, tree.shape[0]), jnp.argmax(sequences, axis = 2))
+    sequences_ = jnp.argmax(sequences, axis = 2)
     
-
-    if(verbose==True):
-        show_graph_with_labels(discretize_tree_topology(tree, n_all),n_leaves)
-        
-    seq_onehot = jnp.transpose(sequences, (2,0,1)) # bring onehot encoding to the front (onehot, n_all, seq_length)
-    sel        = jnp.expand_dims(tree, axis = 0)   # make it (1, n_all, n_all)
-
-    selection  = jnp.matmul(sel, seq_onehot)
-    
-    # print(selection)
-    
-    #method 1: (downside needs integers as we are indexing)
-    #selection = selection.astype(int)
-    #ans = sm[selection,sequences].sum()
-    
-    #method 2:
-    if(surrogate_loss):
-        '''
-            This is an approximation of the traversal cost, because seq_onehot is soft 
-        '''
-        out = jnp.transpose(selection, (1,2,0))
-        ans = (jnp.sum(abs((out - sequences)), axis = [1,2])/(2)).sum()
-        
-        # ans = (jnp.sum((out - sequences)**2, axis = [1,2])/(2)).sum() # L2 loss
- 
-        #ans = ((nn.sigmoid((abs(selection - sequences))) - 0.5)*2).sum() ## works currently as sm is the basic config. need to think about extending
-    else:
-        '''
-            This is the exact traversal cost, but it is not differentiable.
-            similarity matrix is assumed to be a 1s matrix with 0s on the diagonal
-        '''
-        selection_ = jnp.matmul(discretize_tree_topology(tree, tree.shape[0]), jnp.argmax(sequences, axis = 2))
-        sequences_ = jnp.argmax(sequences, axis = 2)
-    
-        sm  = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.bfloat16)
-        
-        ans = sm[jnp.round(selection_).astype(jnp.int32),jnp.round(sequences_).astype(jnp.int32)].sum()
+    ans = sm[jnp.round(selection_).astype(jnp.int64),jnp.round(sequences_).astype(jnp.int64)].sum()
 
     return ans
-
-def DFS(curr : int, tree : Float[Array,"nodes nodes"], path_prob : float, visited : List[Float], depth : int, verbose=False ) -> List[Float]:
-  '''
-    Runs DFS on the tree and returns the visited nodes and the conflicts
-    Args:
-        curr    : current node
-        tree    : tree topology matrix (adjacency matrix)
-                  shape(n_all, n_all)
-        path_prob : probability of the path till now
-        visited   : list of visited nodes
-        depth     : depth of the tree at the current node
-        
-        verbose : print the visited nodes
-    Returns:
-        visited : list of visited nodes
-  '''
-
-  if(verbose):
-    print("-"*depth, "came to -> ", curr, " with path prob ", path_prob)
-
-  ind = jnp.argpartition(tree[:-1,curr], -1)[-2:][::-1] #maxpool choice
-  sel_ind = ind
-
-  if(verbose):
-    print("-"*depth, "🏃🏻‍♂️ going to visit -> ", sel_ind, " with probs : ", tree[:,curr][sel_ind])
-  
-  for j in range(0,sel_ind.shape[0]):
-    i = sel_ind[j]
-
-    #print("-"*depth, "visiting -> ", i, " with probs : ", lis[:,curr][i])
-
-    if(visited[i] > 0): ## this is not general
-      #conflicts[i] += tree[:,curr][i]*path_prob #*visited[i]    #scale by visited probability came form some node
-      visited[i]    = visited[i] + tree[:,curr][i]*(path_prob) ##even if it's visited with a low probability, need to update
-    else:
-      visited[i]    = visited[i] + tree[:,curr][i]*(path_prob + 1e-10)
-      visited = DFS(i, tree, tree[:,curr][i]*path_prob,  visited,  depth+1, verbose)
-
-  if(verbose):
-    print("-"*depth, "## came back to -> ", curr)
-  
-  return visited
-
-
-def compute_cost_recursive(tree : Float[Array, "nodes nodes"], verbose=False) -> Float:
-    """Computes the two combined costs of the tree
-        1. loops (measured by conflicts)
-        2. unvisited nodes
-
-    Args:
-        tree (shape = (n_all, n_all)): tree adjacency matrix
-        verbose (bool, optional): print the visited nodes. Defaults to False.
-
-    Returns:
-        Float: loops + unvisited nodes
-    """  
-
-    visited = [0] * tree.shape[0]
-    visited[-1] = 1
-
-    visited = DFS(tree.shape[0] - 1, tree, 1, visited, 0, verbose = verbose)
-
-    if(verbose):
-        print("\n\n#######")
-        print(" Visited nodes : ", jnp.asarray(visited))
-        #print(" Conflicts : ", jnp.asarray(conflicts))
-        print("#######\n\n")
-
-        #print(params['t'].shape[0] - sum(visited),conflicts)
-
-        print("\nDistance from prototype -> ", jnp.array(visited) - 1, " --> total ", abs(jnp.array(visited) - 1).sum() )
-        # print("Total Conflicts --> ", jnp.array(conflicts).sum() )
-    
-    #print(params['t'].shape[0] - sum(visited)/, conflicts)
-    return abs(jnp.array(visited) - 1).sum() #params['t'].shape[0] - sum(visited) +  conflicts
-
-
-@jit
-def _h(W):
-    '''
-        DAGs with NO TEARS: Continuous Optimization for Structure Learning
-        Authors : Zheng, Xun, Bryon Aragam, Pradeep K. Ravikumar, and Eric P. Xing.
-    '''
-    W = W.at[-1,-1].set(0) #reset
-    
-    """Evaluate value and gradient of acyclicity constraint."""
-    E = slin.expm(W * W)  # (Zheng et al. 2018)
-    
-    d = W.shape[0]
-    h = jnp.trace(E) - d
-    #     # A different formulation, slightly faster at the cost of numerical stability
-    #     M = np.eye(d) + W * W / d  # (Yu et al. 2019)
-    #     E = np.linalg.matrix_power(M, d - 1)
-    #     h = (E.T * M).sum() - d
-    G_h = E.T * W * 2
-    return h#, G_h
-
-
-@jit
-def _h_det(W, s=1.01):
-    '''
-        DAGMA: Learning DAGs via M-matrices and a Log-Determinant Acyclicity Characterization
-        Authors : Bello, Kevin and Aragam, Bryon and Ravikumar, Pradeep
-    '''
-    W = W.at[-1,-1].set(0) #reset
-    
-    d = W.shape[0]
-    Id = jnp.eye(d)#.astype(self.dtype)
-    
-    """Evaluate value and gradient of the logdet acyclicity constraint."""
-    M = s * Id - W * W
-    h = - la.slogdet(M)[1] + d * jnp.log(s)
-    #G_h = 2 * W * slin.inv(M).T 
-    
-    return h
 
 def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, epoch : int = 0, verbose = False) -> Float:
     """Computes the total loss for a given set of sequences and a tree
@@ -371,29 +285,91 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
     if(metadata['args']['fix_tree']):
         t_ = base_tree
     else:   
-        t_ = update_tree(params, base_tree, epoch)
+        t_ = update_tree(params, epoch)
     
-    
-    acyclic_cost_soft = 0 #_h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
 
-    cost_surrogate = compute_cost(seqs_,t_, metadata) # surrogate traversal cost
+    cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
 
-    tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
+    tree_force_loss = enforce_graph(t_,10,metadata)
     
-    loss = cost_surrogate + temp*(tree_force_loss + loop_loss + bidirection_loss) # + temp*acyclic_cost_soft
+    loss = cost_surrogate + temp*(tree_force_loss)
 
     if(verbose):
-        cost         = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
-        acyclic_cost = 0 #_h_det(discretize_tree_topology(t_, n_all))*100
-        
-        cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters']).astype(jnp.bfloat16)
-        _, dp_table, sankoff_cost = run_sankoff(discretize_tree_topology(t_, n_all), cost_mat, jnp.argmax(seqs, axis = 2), metadata)
-        soft_dp_table, sankoff_soft_cost = run_diff_sankoff(t_, cost_mat, jnp.argmax(seqs, axis = 2), metadata, epsilon = 0.145e-3)
-        
-        return cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, acyclic_cost_soft, acyclic_cost, sankoff_soft_cost, sankoff_cost, soft_dp_table, dp_table, loss
+        sm   = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.bfloat16)
+        cost = compute_cost(seqs_,t_, sm) # real traversal cost
+
+        return cost, cost_surrogate, tree_force_loss, loss
 
     return loss
 
+@jit
+def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], metadata : Dict, temp : Float, epoch : int) -> Float:
+    """Computes the total loss for a given set of sequences and a tree
+
+    Args:
+        params : contains the tree and seq trainable parameters
+        seqs   : sequences array. shape = (n_all, length, n_letters
+        base_tree : base tree with zeros
+        metadata (Dict) : contains the metadata
+        temp (Float) : temperature for the loss
+        verbose : returns individual loss item if True. Defaults to False.
+
+    Returns:
+        cost : total loss
+    """    
+    n_leaves = metadata['n_leaves']
+    n_all    = metadata['n_all']
+
+    seqs_ = update_seq(seq_params, seqs, temp )
+    
+    t_ = update_tree(tree_params, epoch, temp)
+    
+
+    cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
+
+    tree_force_loss = enforce_graph(t_,10,metadata)
+    
+    cross_entropy_loss = entropy_loss(t_)
+    
+    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
+
+    return loss
+
+@jit
+def compute_detailed_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], metadata : Dict, temp : Float, sm : Float[Array, "letters letters"], epoch : int = 0) -> Float:
+    """Computes the total loss for a given set of sequences and a tree
+
+    Args:
+        params : contains the tree and seq trainable parameters
+        seqs   : sequences array. shape = (n_all, length, n_letters
+        base_tree : base tree with zeros
+        metadata (Dict) : contains the metadata
+        temp (Float) : temperature for the loss
+        verbose : returns individual loss item if True. Defaults to False.
+
+    Returns:
+        cost : total loss
+    """    
+    n_leaves = metadata['n_leaves']
+    n_all    = metadata['n_all']
+
+    seqs_ = update_seq(seq_params, seqs, temp )
+    
+    t_ = update_tree(tree_params, epoch, temp)
+    
+
+    cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
+
+    tree_force_loss = enforce_graph(t_,10,metadata)
+    cross_entropy_loss = entropy_loss(t_)
+    
+    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
+
+    cost = compute_cost(seqs_,t_, sm) # real traversal cost
+
+    return cost, cost_surrogate, tree_force_loss, cross_entropy_loss, loss
+
+@jax.jit
 def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
     """Computes the total loss for a given set of sequences and a tree
 
@@ -419,19 +395,19 @@ def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes l
     
     recurse_cost = 0 #_h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
     
-    cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters']).astype(jnp.bfloat16)
-    _, cost_surrogate_sankoff = run_diff_sankoff(t_, cost_mat, jnp.argmax(seqs, axis = 2), metadata, epsilon = 0.145e-1)#/(1+temp))
+    cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters']).astype(jnp.float64)
+    _, cost_surrogate_sankoff = run_diff_sankoff(t_, cost_mat, jnp.argmax(seqs, axis = 2), metadata, epsilon = (0.145e-1)/(1+temp))
     
    
 
-    tree_force_loss, loop_loss, bidirection_loss = enforce_graph(t_,10,metadata)
+    tree_force_loss = enforce_graph(t_,10,metadata)
     
     loss = cost_surrogate_sankoff #+ 100*tree_force_loss #+ temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost)
 
     if(verbose):
         _, _, cost = run_sankoff(discretize_tree_topology(t_, n_all), cost_mat, jnp.argmax(seqs, axis = 2), metadata, return_path = False)
         #compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
-        return cost, cost_surrogate_sankoff, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss
+        return cost, cost_surrogate_sankoff, tree_force_loss, loss
 
     return loss
 

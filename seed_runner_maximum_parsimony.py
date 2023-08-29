@@ -6,8 +6,18 @@ import math
 # id = input()
 # os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
 
+
+print("how much percentage to dedicate from gpu (eg. .90)?")
+percentage = input()
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = percentage
+
+
+print("how much percentage to dedicate from gpu (eg. .90)?")
+percentage = input()
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = percentage
+
 # Define the list of seeds you want to use
-seeds = [x+42 for x in range(10)]
+seeds = [x+47 for x in range(5)]#[::-1]
 
 # Define the leaf complexity you want to use
 print("which leaf complexity do you want to use?")
@@ -21,18 +31,24 @@ print("ok will run for the following leaf complexities:")
 print(leaves)
 
 # Common command and arguments
-base = ["python", "train.py", "-nl", "20", "-m", "50", "-sl", "256", "-tLs", "[0,0.005,10,50]", "-lr", "0.1","-lr_seq", "0.1","-t", "learning_both", "-p","Batch-Run-Maximum-Parsimony-A100-triu", "-alt", "-ai", "10", "-n", "Batch Run"]
+base = ["python", "train_batch_implicit_diff.py", "-nl", "20", "-m", "30", "-sl", "256", "-tLs", "[0,0.005,10,50]", "-lr", "0.1","-lr_seq", "0.01","-t", "float64-multi-init-run", "-p","Batch-Run-Maximum-Parsimony-A100-META-optimized", "-alt", "-n", "Low mutations Run"]
 base = base + ["-g", "0"]
 
 for l in leaves:
     cmd = base + ["-l", str(l)]
     
     if(l < 32):
-        cmd = cmd + ["-e", "2000"]
-    elif(l < 128):
         cmd = cmd + ["-e", "5000"]
+        cmd = cmd + ["-ai", "1", "-ic", "100"]
+    elif(l < 64):
+        cmd = cmd + ["-e", "6000"]
+        cmd = cmd + ["-ai", "2", "-ic", "100"]
+    elif(l <= 128):
+        cmd = cmd + ["-e", "6000"]
+        cmd = cmd + ["-ai", "3", "-ic", "10"]
     else:
-        cmd = cmd + ["-e", "7000"]
+        cmd = cmd + ["-e", "6000"]
+        cmd = cmd + ["-ai", "4", "-ic", "10"]
     
     print(f"Running for {l} leaves")
     

@@ -96,12 +96,13 @@ def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters,
     for node in range(n_leaves, n_all): ## loop all the ancestors in order
         
         ## consider topologically feasible candidates (slicing -> :node)
-        prob_children    = jax.nn.softmax(adj[:,node][:node]/(epsilon))*2 #softranks(adj[:,node][:node], epsilon = epsilon)/epsilon)*2 
-        children_onehot  = jnp.eye(node,node).astype(jnp.bfloat16)*prob_children
+        prob_children    = jax.nn.softmax(adj[:,node][:node]*5)*2 #softranks(adj[:,node][:node], epsilon = epsilon)/epsilon)*2 
+        children_onehot  = jnp.eye(node,node).astype(jnp.float64)*prob_children
         
         #print(prob_children)
+        delta = 1e1*(adj[:,node][:node].sum() - 2)**2
         
-        mask = jnp.matmul(children_onehot, jnp.ones((node,dp.shape[1])).astype(jnp.bfloat16)) #mask to supress rows from the dp table
+        mask = jnp.matmul(children_onehot, jnp.ones((node,dp.shape[1])).astype(jnp.float64)) #mask to supress rows from the dp table
 
         if(verbose):
             print(f"at node {node+1} children are : {adj[:,node][:node]}")
@@ -113,7 +114,7 @@ def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters,
         
         ans = node_mix * mask[::, None]
         ans = softmin(ans, epsilon, axis = 2) #-nn.logsumexp(-ans/epsilon, axis = 2)*epsilon
-        ans = jnp.sum(ans, axis = 0)
+        ans = jnp.sum(ans, axis = 0) + delta #penalize more if connections are not rigid
 
         dp = dp.at[node,::].set(ans)
 
@@ -154,16 +155,16 @@ def backtrack_dp(node, letter, seq_chars, connections, n_leaves):
 def run_diff_sankoff(adj, cost_mat, seq, metadata, epsilon = 1e-5):
     adj = adj.at[-1,-1].set(0) ##manually remove self connection (convention used in the train script)
     
-    ## ensure types are bfloat16
-    adj = adj.astype(jnp.bfloat16)
-    seq = seq.astype(jnp.bfloat16)
-    cost_mat = cost_mat.astype(jnp.bfloat16)
+    ## ensure types are float64
+    adj = adj.astype(jnp.float64)
+    seq = seq.astype(jnp.float64)
+    cost_mat = cost_mat.astype(jnp.float64)
     
     n_letters = metadata['n_letters']
     n_leaves  = metadata['n_leaves']
     
     ##empty dp table
-    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters)).astype(jnp.bfloat16)*10
+    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters)).astype(jnp.float64)*1e5
     
     # connections = dp_nodes.copy()
         
@@ -174,18 +175,18 @@ def run_diff_sankoff(adj, cost_mat, seq, metadata, epsilon = 1e-5):
 def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
     adj = adj.at[-1,-1].set(0) ##manually remove self connection (convention used in the train script)
     
-    ## ensure types are bfloat16
-    adj = adj.astype(jnp.bfloat16)
-    seq = seq.astype(jnp.bfloat16)
-    cost_mat = cost_mat.astype(jnp.bfloat16)
+    ## ensure types are float64
+    adj = adj.astype(jnp.float64)
+    seq = seq.astype(jnp.float64)
+    cost_mat = cost_mat.astype(jnp.float64)
     
     
     n_letters = metadata['n_letters']
     n_leaves  = metadata['n_leaves']
     
     ##empty dp tables
-    dp_nodes = jnp.zeros((seq.shape[1], metadata['n_all'], n_letters, 4)).astype(jnp.bfloat16)
-    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters)).astype(jnp.bfloat16)*1e2
+    dp_nodes = jnp.zeros((seq.shape[1], metadata['n_all'], n_letters, 4)).astype(jnp.float64)
+    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters)).astype(jnp.float64)*1e5
     
     # connections = dp_nodes.copy()
         
@@ -202,8 +203,8 @@ def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
     #     connections = connections.at[i].set(ans[1])
         
     
-    seq_chars = jnp.zeros((seq.shape[1], metadata['n_all'],1)).astype(jnp.bfloat16)
-    found_seq = seq.copy().astype(jnp.float32)
+    seq_chars = jnp.zeros((seq.shape[1], metadata['n_all'],1)).astype(jnp.float64)
+    found_seq = seq.copy().astype(jnp.float64)
     
     if(return_path):
         node = adj.shape[0] - 1
@@ -218,4 +219,4 @@ def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
                 # print(".", end = "")
 
     
-    return found_seq, dp, dp[:, -1].min(axis = 1).sum()#, dp
+    return found_seq, dp, dp[:, -1].min(axis = 1).sum()
