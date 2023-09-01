@@ -58,6 +58,5 @@ def remove_branches(
 
         #look at children of the chid
         adj = remove_branches(adj, child)
-     
     
     return adj
