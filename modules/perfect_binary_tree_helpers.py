@@ -23,7 +23,7 @@ def get_max_node_id_for_depth(
         depth  : int,
         total_depth : int
     ) -> int :
-    """Given, an arbitrary depth, return the maximum node id possible.
+    """Given, an arbitrary depth, return the maximum node id possible (counting starts from 0).
         (when depth is a larger value, returned id will be smaller)
 
     Args:
@@ -50,13 +50,45 @@ def remove_branches(
     Returns:
         New adjacency matrix
     """
+    
     children = jnp.where(adj[:,node] == 1)[0]
+    
+    removed_leaves = 0
+    nodes_in_path = [node]
+    
+    if(children.shape[0] == 0):
+        return adj, 1, nodes_in_path
     
     for child in children:
         #remove current child
         adj = adj.at[child,node].set(0)
 
         #look at children of the chid
-        adj = remove_branches(adj, child)
+        adj, l_count, nodes = remove_branches(adj, child)
+        removed_leaves += l_count
+        
+        nodes_in_path.extend(nodes)
     
-    return adj
+    return adj, removed_leaves, nodes_in_path
+
+def find_children_ids(
+        adj : Array,
+        node : int,
+    ) -> list :
+    """Given an adjacency matrix, recursively traverse and find the leaf node ids
+    
+    
+    """
+    
+    children = jnp.where(adj[:,node] == 1)[0]
+    leaves = []
+    
+    if(children.shape[0] == 0):
+        return [node]
+    
+    for child in children:
+        temp = find_children_ids(adj, child)
+        
+        leaves.extend(temp)
+    
+    return leaves

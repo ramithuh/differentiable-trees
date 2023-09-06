@@ -1,4 +1,5 @@
 import jax
+import math
 import numpy as np
 import jax.nn as nn
 import jax.numpy as jnp
@@ -49,7 +50,7 @@ def generate_t(n_nodes, n_leaves, seed = None):
   print(mat)
   return mat
 
-def show_graph_with_labels(adjacency_matrix, n_leaves, label_names = None, return_img = False):
+def show_graph_with_labels(adjacency_matrix, n_leaves, leaf_info = None, return_img = False):
     '''
       Shows the tree with label names. Adds distinct colors to the leave nodes and the ancestors of the leave nodes.
 
@@ -59,12 +60,21 @@ def show_graph_with_labels(adjacency_matrix, n_leaves, label_names = None, retur
       Returns:
         None
     '''
+    label_names = {}
+    leaf_ids = []
     
-    if(label_names == None):
+    if(leaf_info != None):
+        label_names = leaf_info[0]
+        leaf_ids = leaf_info[1]    
+    else:
         # if label_names not provided, assuming perfect binary tree
-
+        assert n_leaves == 2**int(math.log2(n_leaves))
+        
         for i in range(0,adjacency_matrix.shape[0]):
-            label_names[i] = str(i)  
+            label_names[i] = str(i)
+        
+        for i in range(0,n_leaves):
+            leaf_ids.append(i)
     
     rows, cols = np.where(adjacency_matrix == 1)
     edges = zip(rows.tolist(), cols.tolist())
@@ -74,8 +84,9 @@ def show_graph_with_labels(adjacency_matrix, n_leaves, label_names = None, retur
     gr.add_edges_from(edges)
     
     color_map = []
+    n_id = 0
     for node in gr:
-        if(node >= n_leaves):
+        if(node not in leaf_ids):
             color_map.append('red')
         else:
             color_map.append('yellow')
@@ -85,7 +96,7 @@ def show_graph_with_labels(adjacency_matrix, n_leaves, label_names = None, retur
     fig = plt.figure()
     
     pos = graphviz_layout(gr, prog="dot")
-    nx.draw(gr,pos, node_size=500 , labels = label_names,with_labels=True, node_color = color_map)
+    nx.draw(gr, pos, node_size = 1000/math.log2(n_leaves), font_size=40/math.log2(n_leaves), labels = label_names, with_labels = True, node_color = color_map)
     plt.close(fig)
     
     if(return_img):
