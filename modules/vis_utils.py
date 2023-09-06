@@ -49,7 +49,7 @@ def generate_t(n_nodes, n_leaves, seed = None):
   print(mat)
   return mat
 
-def show_graph_with_labels(adjacency_matrix, n_leaves, return_img = False):
+def show_graph_with_labels(adjacency_matrix, n_leaves, label_names = None, return_img = False):
     '''
       Shows the tree with label names. Adds distinct colors to the leave nodes and the ancestors of the leave nodes.
 
@@ -60,11 +60,11 @@ def show_graph_with_labels(adjacency_matrix, n_leaves, return_img = False):
         None
     '''
     
-    label_names = {}
-    
-    for i in range(0,adjacency_matrix.shape[0]):
-        label_names[i] = str(i)
-        
+    if(label_names == None):
+        # if label_names not provided, assuming perfect binary tree
+
+        for i in range(0,adjacency_matrix.shape[0]):
+            label_names[i] = str(i)  
     
     rows, cols = np.where(adjacency_matrix == 1)
     edges = zip(rows.tolist(), cols.tolist())
