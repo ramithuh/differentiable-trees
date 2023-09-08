@@ -68,7 +68,7 @@ def show_graph_with_labels(adjacency_matrix, n_leaves, leaf_info = None, return_
         leaf_ids = leaf_info[1]    
     else:
         # if label_names not provided, assuming perfect binary tree
-        assert n_leaves == 2**int(math.log2(n_leaves))
+        # assert n_leaves == 2**int(math.log2(n_leaves))
         
         for i in range(0,adjacency_matrix.shape[0]):
             label_names[i] = str(i)

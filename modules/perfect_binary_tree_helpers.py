@@ -77,7 +77,12 @@ def find_children_ids(
     ) -> list :
     """Given an adjacency matrix, recursively traverse and find the leaf node ids
     
+    Args:
+        adj : adjacency matrix,
+        node : current node
     
+    Returns:
+        list of new leaves from the traversed path
     """
     
     children = jnp.where(adj[:,node] == 1)[0]
