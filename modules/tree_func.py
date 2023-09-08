@@ -68,12 +68,14 @@ def update_tree(params : Dict[str, Array], epoch : int = 0 ,  temp : Float = 1 )
     shifted_upper_indices = (upper_indices[0] + n_ancestors, upper_indices[1] + n_leaves )
     shifted_lower_indices = (lower_indices[0] + n_leaves, lower_indices[1] + n_leaves )
 
+    #
     inf_matrix = inf_matrix.at[:n_ancestors, n_leaves:].set(perturbed_tree_params[:n_ancestors])
     inf_matrix = inf_matrix.at[shifted_upper_indices].set(perturbed_tree_params[n_ancestors:, :][upper_indices])
     
-    lower_triangle_values = perturbed_tree_params[n_ancestors:, :][lower_indices]
+    # Lower part; comment unless using entropy loss
+    #lower_triangle_values = 0 #perturbed_tree_params[n_ancestors:, :][lower_indices]
+    #inf_matrix = inf_matrix.at[shifted_lower_indices].set(lower_triangle_values)
     
-    inf_matrix = inf_matrix.at[shifted_lower_indices].set(lower_triangle_values)
     inf_matrix = inf_matrix.at[-1,-1].set(1)
     
     return jax.nn.softmax(inf_matrix, axis = 1)
@@ -329,7 +331,7 @@ def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str
 
     tree_force_loss = enforce_graph(t_,10,metadata)
     
-    cross_entropy_loss = entropy_loss(t_)
+    cross_entropy_loss = 0 #entropy_loss(t_)
     
     loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
 
@@ -361,7 +363,7 @@ def compute_detailed_loss_optimized(tree_params : Dict[str, Array], seq_params :
     cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
 
     tree_force_loss = enforce_graph(t_,10,metadata)
-    cross_entropy_loss = entropy_loss(t_)
+    cross_entropy_loss = -1 #entropy_loss(t_) ##turned off
     
     loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
 
