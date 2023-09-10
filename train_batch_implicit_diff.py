@@ -171,14 +171,16 @@ if(args['groundtruth']):
         cost_mat = (jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)).astype(jnp.float64)
         
         print("running sankoff on groundtruth tree")
-        _, _, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
+        sankoff_seqs, dp, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata, return_path = True)
         print("done running sankoff on groundtruth tree")
         
-        wandb.log(
-            {
-                #'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
-                'sankoff_cost': sankoff_cost,
-                #'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.float64), tree, metadata, surrogate_loss = False)
+        wandb.log({'sankoff_cost': sankoff_cost})
+        
+        if(metadata['n_leaves'] <= 64 ):
+            wandb.log({
+                'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
+                # 'dp_table' : wandb.data_types.Plotly(px.imshow(dp[:,:,0], text_auto=True)),
+                'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.float64), tree, sm)
             })
         
     if(args['shuffle_seqs']):        

@@ -49,6 +49,9 @@ def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_let
         #for i in range(n_letters): # consider all the possible letters
         total_cost = 0
         nodes = []
+        
+        assert children.shape[0] == 2, "only bifurcating trees are supported"
+        
         for child in children:
             cur_node = int(child)
             
@@ -60,13 +63,13 @@ def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_let
             total_cost += cost
             
         dp = dp.at[node,::].set(total_cost)
-
+    
         #below parts should be generalized for trees other than bifurcating ones
-        # dp_nodes = dp_nodes.at[node, ::, 0].set(nodes[0][0])
-        # dp_nodes = dp_nodes.at[node, ::, 1].set(nodes[0][1])
+        dp_nodes = dp_nodes.at[node, ::, 0].set(nodes[0][0]) # child 1
+        dp_nodes = dp_nodes.at[node, ::, 1].set(nodes[0][1]) # letter in child 1
 
-        # dp_nodes = dp_nodes.at[node, ::, 2].set(nodes[1][0])
-        # dp_nodes = dp_nodes.at[node, ::, 3].set(nodes[1][1])
+        dp_nodes = dp_nodes.at[node, ::, 2].set(nodes[1][0]) # child 2
+        dp_nodes = dp_nodes.at[node, ::, 3].set(nodes[1][1]) # letter in child 2
 
     return dp, dp_nodes
 
@@ -209,7 +212,7 @@ def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
     if(return_path):
         node = adj.shape[0] - 1
 
-        if(seq.shape[0] <=  1024): # if too many sequences don't backtrack and find best ancestors, cost is enough
+        if(seq.shape[0] <=  64): # if too many sequences don't backtrack and find best ancestors, cost is enough
             for i in range(0,seq.shape[1]):
                 letter = jnp.argmin(dp[i,node,:]).astype(int)
 
