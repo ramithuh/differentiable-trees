@@ -152,7 +152,7 @@ sm = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(meta
 if(args['groundtruth']):
     # seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
     
-    [seqs, leaf_ids], [gt_seqs, label_names], [tree, original_tree, fig] = generate_general_groundtruth(metadata, perfect=False, seed = metadata['seed'], show_derivation = True)
+    [seqs, leaf_ids], [gt_seqs, label_names], [tree, shrinked_tree, original_tree, fig] = generate_general_groundtruth(metadata, perfect=False, seed = metadata['seed'], show_derivation = True)
 
     seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.float64)
     gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.float64)
@@ -190,7 +190,7 @@ if(args['groundtruth']):
         shuffled_ancestors = jax.random.permutation(key, seqs[n_leaves:-1], independent=False) 
         seqs = seqs.at[n_leaves:-1].set(shuffled_ancestors)
 
-    gt_tree = show_graph_with_labels(tree, n_leaves, [label_names, leaf_ids], return_img = True)
+    gt_tree = show_graph_with_labels(tree, n_leaves, return_img = True)
     gt_seqs_plot = px.imshow(jnp.argmax(gt_seqs, axis = 2), text_auto=True)
 
     gt_tree_matrix = px.imshow(tree, text_auto=True)

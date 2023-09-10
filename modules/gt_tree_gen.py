@@ -284,15 +284,9 @@ def generate_general_groundtruth(
     ## Extract indices of key stuff
     leaf_ids, ance_ids, orphans_ = extract_key_parts(adj)
     
-    ## Extract leaves and ancestors from the original seq matrix
-    extracted_leaves = all_seqs[leaf_ids]
-    extracted_ancestors = all_seqs[ance_ids]
-    
-    ## Checking whether groundtruth generation worked correctly
-    assert n == extracted_leaves.shape[0]
-    
-    dummy_ancestors = jnp.zeros((n-1, extracted_leaves.shape[1]))
-    new_leaves = jnp.vstack((extracted_leaves, dummy_ancestors))
+    ## Cleanup all sequences by removing sequences corresponding to orphan nodes
+    shrinked_all_seqs = all_seqs.copy()
+    shrinked_all_seqs = jnp.delete(all_seqs, orphans_, axis = 0)
     
     ## Cleanup the pruned tree by removing orphan nodes
     shrinked_adj = adj.copy()
@@ -302,11 +296,21 @@ def generate_general_groundtruth(
     ## Extract indices of key stuff
     new_leaf_ids, new_ance_ids, new_orphans_ = extract_key_parts(shrinked_adj)
     
-    ## Build a new seqs matrix with correct ordering which matches shrinked_adj
-    new_all_seqs = jnp.zeros((new_leaves.shape[0], new_leaves.shape[1]))
-    new_all_seqs = new_all_seqs.at[new_leaf_ids].set(extracted_leaves)
-    new_all_seqs = new_all_seqs.at[new_ance_ids].set(extracted_ancestors)
+    ## extract leaves and ancestors after the cleanup
+    extracted_leaves    = shrinked_all_seqs[new_leaf_ids]
+    extracted_ancestors = shrinked_all_seqs[new_ance_ids]
     
+    ## Checking whether groundtruth generation worked correctly
+    assert n == extracted_leaves.shape[0]
+
+    ## Build a new seqs matrix with correct ordering which matches shrinked_adj
+    dummy_ancestors = jnp.zeros((n-1, extracted_leaves.shape[1])) # n-1 ancestors for, n leaves
+    new_leaves   = jnp.vstack((extracted_leaves, dummy_ancestors))
+    new_all_seqs = jnp.vstack((extracted_leaves, extracted_ancestors))
+    
+    ## Rearrange the shrinked_adj for this order of sequences (nodes)
+    ordering = jnp.concatenate((new_leaf_ids, new_ance_ids))
+    reordered_adj = shrinked_adj[jnp.ix_(ordering, ordering)]
  
     if(show_derivation):
         '''
@@ -322,6 +326,12 @@ def generate_general_groundtruth(
         
         print_success_info(f"Constructed New Seq Matrix")
         print_success_info(f"\n{new_all_seqs}")
+        
+        print_warning_info(f"Resultant Adjacency Matrix")
+        print_warning_info(f"\n{shrinked_adj}")
+        
+        print_success_info(f"Reordered Adjacency Matrix")
+        print_success_info(f"\n{reordered_adj}")
         
         orphans = jnp.where(adj.sum(axis = 1) == 0)[0]
 
@@ -339,7 +349,7 @@ def generate_general_groundtruth(
         for i in range(0, shrinked_adj.shape[0]):
             label_names[i] = str(i) 
         
-        return [new_leaves, new_leaf_ids], [new_all_seqs, label_names], [shrinked_adj, adj, fig]
+        return [new_leaves, new_leaf_ids], [new_all_seqs, label_names], [reordered_adj, shrinked_adj, adj, fig]
 
-    ##            
-    return new_leaves, new_all_seqs, shrinked_adj
+    ##       
+    return new_leaves, new_all_seqs, reordered_adj
