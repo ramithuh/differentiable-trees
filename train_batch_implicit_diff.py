@@ -279,7 +279,7 @@ pos = 0
 #### Training loop
 for _ in range(metadata['epochs']):
 
-    if(_%10==0):
+    if(_%200==0):
         ###~ Get the current discretized tree
         if(args['fix_tree']): 
             t_ = base_tree
@@ -316,7 +316,7 @@ for _ in range(metadata['epochs']):
         best_seq = update_seq(params, seqs, metadata['seq_temp'])
         
         ## Log the metrics
-    if(_%10==0):
+    if(_%200==0):
         wandb.log(
             {"epoch":_, 
 
@@ -333,7 +333,7 @@ for _ in range(metadata['epochs']):
             "last ancestor" :  wandb.data_types.Plotly(px.imshow((seqs_[-1]), text_auto=True)),
             "tLs":metadata['tLs'][0],})
 
-    if(_%100==0):
+    if(_%200==0):
         print_bold_info(f"epoch {_}")
         print("{:.3f}".format(metadata['tLs'][0]), end = " ")
         print("{:.3f}".format(loss[pos].item()), end=" ")
