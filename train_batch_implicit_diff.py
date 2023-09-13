@@ -150,7 +150,9 @@ base_tree = jnp.zeros((n_all, n_all))
 sm = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(metadata['n_letters']).astype(jnp.float64)
 
 if(args['groundtruth']):
-    seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
+    # seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
+    
+    [seqs, leaf_ids], [gt_seqs, label_names], [tree, shrinked_tree, original_tree, fig] = generate_general_groundtruth(metadata, perfect=False, seed = metadata['seed'], show_derivation = True)
 
     seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.float64)
     gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.float64)
@@ -169,14 +171,16 @@ if(args['groundtruth']):
         cost_mat = (jnp.ones((n_letters,n_letters)) - jnp.eye(n_letters)).astype(jnp.float64)
         
         print("running sankoff on groundtruth tree")
-        _, _, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata)
+        sankoff_seqs, dp, sankoff_cost = run_sankoff(tree, cost_mat, jnp.argmax(seqs, axis = 2), metadata, return_path = True)
         print("done running sankoff on groundtruth tree")
         
-        wandb.log(
-            {
-                #'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
-                'sankoff_cost': sankoff_cost,
-                #'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.float64), tree, metadata, surrogate_loss = False)
+        wandb.log({'sankoff_cost': sankoff_cost})
+        
+        if(metadata['n_leaves'] <= 64 ):
+            wandb.log({
+                'sankoff_seqs': wandb.data_types.Plotly(px.imshow(sankoff_seqs, text_auto=True)),
+                # 'dp_table' : wandb.data_types.Plotly(px.imshow(dp[:,:,0], text_auto=True)),
+                'cost_for_sankoff_seqs' : compute_cost(jax.nn.one_hot(sankoff_seqs, n_letters).astype(jnp.float64), tree, sm)
             })
         
     if(args['shuffle_seqs']):        
@@ -186,9 +190,10 @@ if(args['groundtruth']):
         shuffled_ancestors = jax.random.permutation(key, seqs[n_leaves:-1], independent=False) 
         seqs = seqs.at[n_leaves:-1].set(shuffled_ancestors)
 
-    gt_tree = show_graph_with_labels(tree, n_leaves, True)
+    gt_tree = show_graph_with_labels(tree, n_leaves, return_img = True)
     gt_seqs_plot = px.imshow(jnp.argmax(gt_seqs, axis = 2), text_auto=True)
 
+    gt_tree_matrix = px.imshow(tree, text_auto=True)
     
     gt_cost           = compute_cost(gt_seqs, tree, sm)
     gt_cost_surrogate = compute_surrogate_cost(gt_seqs, tree)
@@ -197,6 +202,7 @@ if(args['groundtruth']):
 
     wandb.log({
         "Groundtruth Tree" : wandb.Image(gt_tree),
+        "Groundtruth Tree Matrix" : wandb.data_types.Plotly(gt_tree_matrix),
         "Groundtruth Seq" : wandb.data_types.Plotly(gt_seqs_plot),
 
         "Groundtruth Tree Force Loss" : gt_tree_force_loss,
@@ -260,7 +266,7 @@ fixed_dummy_pos = 0
 
 params = get_one_tree_and_seq(tree_params, seq_params, fixed_dummy_pos)
 
-fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params), n_all),n_leaves, True)
+fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params), n_all),n_leaves, return_img = True)
 
 compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
 
@@ -280,7 +286,7 @@ for _ in range(metadata['epochs']):
         else:
             t_ = update_tree(params, _, metadata['tLs'][0])
         t_d           = discretize_tree_topology(t_,n_all)
-        tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, True)
+        tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, return_img = True)
         tree_matrix_at_epoch = px.imshow(t_, text_auto=True)
 
         ###~ Get the current sequences as a plot
@@ -358,7 +364,7 @@ if(abs(target_cost - best_ans) == 0):
 else:
     wandb.log({"success":False, "Error" : (best_ans - sankoff_cost)})
 
-best_tree_img = show_graph_with_labels(best_tree, n_leaves, True)
+best_tree_img = show_graph_with_labels(best_tree, n_leaves, return_img = True)
 best_tree_adj = px.imshow(best_tree, text_auto=True)
 
 wandb.log({
