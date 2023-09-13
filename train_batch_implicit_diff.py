@@ -340,7 +340,7 @@ for _ in range(metadata['epochs']):
     
 
     ### update the tree loss schedule
-    if(_%metadata['tLs'][3]==0):
+    if(_%metadata['tLs'][3]==0 and _ > args['delay_schedule']):
         metadata['tLs'][0] = min(metadata['tLs'][2], metadata['tLs'][0] + metadata['tLs'][1])
         
 print_success_info("Optimization done!\n")

@@ -44,6 +44,7 @@ def parse_args_v2():
 
     parser.add_argument('-ai','--alternate_interval', help='alternate_interval', required=False, type = int)
     parser.add_argument('-tLs','--tree_loss_schedule' , help='tree loss schedule', required=False, type = str)
+    parser.add_argument('-d','--delay_schedule' , help='delay the tree loss schedule', required=False, type = int, default = -1)
     parser.add_argument('-lr','--learning_rate'         , help='learning rate'    , required=False, type = float, default = 0.001)
     parser.add_argument('-lr_seq','--learning_rate_seq' , help='learning rate for seq' , required=False, type = float)
 
