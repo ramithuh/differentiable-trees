@@ -387,12 +387,13 @@ def compute_detailed_loss_optimized(tree_params : Dict[str, Array], seq_params :
 
     tree_force_loss = enforce_graph(t_,10,metadata)
     cross_entropy_loss = -1 #entropy_loss(t_) ##turned off
+    connectivity_loss  = leaf_to_root_connectivity_loss(t_) 
     
-    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
+    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss + connectivity_loss
 
     cost = compute_cost(seqs_,t_, sm) # real traversal cost
 
-    return cost, cost_surrogate, tree_force_loss, cross_entropy_loss, loss
+    return cost, cost_surrogate, tree_force_loss, cross_entropy_loss, connectivity_loss, loss
 
 @jax.jit
 def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:

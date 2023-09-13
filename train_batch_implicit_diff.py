@@ -301,7 +301,7 @@ for _ in range(metadata['epochs']):
     tree_params, tree_opt_state = jitted_tree_update(tree_params, tree_opt_state, tree_opt_state.aux, [seqs, metadata, metadata['tLs'][0],_])
     seq_params = tree_opt_state.aux
 
-    cost, cost_surrogate, tree_force_loss, entropy_loss, loss = vmap_compute_detailed_loss_optimized(tree_params, seq_params, seqs, metadata, metadata['tLs'][0], sm,  _)
+    cost, cost_surrogate, tree_force_loss, entropy_loss, connectivity_loss, loss = vmap_compute_detailed_loss_optimized(tree_params, seq_params, seqs, metadata, metadata['tLs'][0], sm,  _)
     pos = jnp.argmin(cost)
     
     params = get_one_tree_and_seq(tree_params, seq_params, pos)
@@ -325,6 +325,7 @@ for _ in range(metadata['epochs']):
             "traversal cost (surrogate)": cost_surrogate[pos],
             "tree force loss": tree_force_loss[pos],
             "entropy loss": entropy_loss[pos],
+            "connectivity loss": connectivity_loss[pos],
             
             "tree":wandb.Image(tree_at_epoch),
             "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
