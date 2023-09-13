@@ -143,17 +143,17 @@ def update_seq(params : Dict[str, Array], seqs : Float[Array, "nodes letters"], 
         seqs = seqs.at[- n_leaves + i + 1].set(seq)
         #seqs = seqs.at[- n_leaves + i + 1].set(jax.lax.stop_gradient(hard_seq - seq) + seq)
     
-#     seq_1 = nn.sigmoid(temperature*params['d'])
-#     seq_2 = nn.sigmoid(temperature*params['e'])
-    
-#     hard_seq_1 = (seq_1 > 0.5).astype(int)
-#     hard_seq_2 = (seq_2 > 0.5).astype(int)
-    
-    
-    
-    
-#     seqs = seqs.at[-2].set(seq_1)
-#     seqs = seqs.at[-1].set(seq_2)
+    #     seq_1 = nn.sigmoid(temperature*params['d'])
+    #     seq_2 = nn.sigmoid(temperature*params['e'])
+        
+    #     hard_seq_1 = (seq_1 > 0.5).astype(int)
+    #     hard_seq_2 = (seq_2 > 0.5).astype(int)
+        
+        
+        
+        
+    #     seqs = seqs.at[-2].set(seq_1)
+    #     seqs = seqs.at[-1].set(seq_2)
     
     return seqs
 
@@ -305,6 +305,26 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
     return loss
 
 @jit
+def leaf_to_root_connectivity_loss(
+        adj : Array
+    ) -> float:
+    """Computes how many leaves are not connected to the root"""
+    
+    adj = adj.at[-1,-1].set(0) # additional check to remove self loop
+    
+    n_leaves = (adj.shape[0] + 1)//2
+    
+    depth_u_bound = math.ceil(math.log2(n_leaves))
+    paths = jnp.zeros((n_leaves,))
+    
+    for path_length in range(1, depth_u_bound + 1):
+        out = jnp.linalg.matrix_power(adj, path_length)
+        
+        paths += out[:n_leaves,-1]
+    
+    return n_leaves - paths.sum()
+
+@jit
 def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], metadata : Dict, temp : Float, epoch : int) -> Float:
     """Computes the total loss for a given set of sequences and a tree
 
@@ -332,8 +352,9 @@ def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str
     tree_force_loss = enforce_graph(t_,10,metadata)
     
     cross_entropy_loss = 0 #entropy_loss(t_)
+    connectivity_loss  = leaf_to_root_connectivity_loss(t_) 
     
-    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
+    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss + connectivity_loss
 
     return loss
 
