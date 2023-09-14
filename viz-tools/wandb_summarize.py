@@ -10,7 +10,11 @@ import plotly.figure_factory as ff
 
 api = wandb.Api()
 
-def print_stats(counts):
+def print_stats(counts, seeds):
+    """
+        Prints the seeds and counts of runs for each leaf complexity.
+        Helps to pinpoint if there are any missing runs.
+    """
     key_counts = np.array(list(counts.values()))
     
     ## check if all counts are the same
@@ -23,6 +27,24 @@ def print_stats(counts):
         for key in counts.keys():
             st.write(f"Number of runs for {key} leaves: {counts[key]}")
             
+    ## check if there are representative seeds (42 to 51)
+    seeds_represented = True
+    with st.expander(f"Seed representation for {len(counts.keys())} leaves"):
+        for i in range(42, 52):
+            st.write(f"Count from seed {i} = {seeds[i]}")
+            
+            if(i not in seeds.keys()):
+                seeds_represented = False
+            else:
+                ## check if the runs from each seed matches the number of types of experiments (leaf complexity)
+                if(seeds[i] != len(counts.keys())):
+                    seeds_represented = False
+    
+    if(seeds_represented):
+        st.success("All seeds are represented")
+    else:
+        st.error("Not all seeds are represented")
+                  
 def has_run_crashed(run) -> bool:
     if('best cost' not in run.summaryMetrics.keys()):
         return True
@@ -48,6 +70,7 @@ def retreive_exps(
     elves = {}
     
     counts = {}
+    seeds = {}
 
     for l in sorted(leaves_list):
         errors[str(l)] = []
@@ -57,7 +80,6 @@ def retreive_exps(
         
         for run in runs:            
             if(run.config['n_leaves'] == l and run.config['tLs']==[0, 0.005, 10, 50]):
-                
                 
                 if(has_keywords(run.name, excl_keywords) or has_run_crashed(run) ):
                     continue
@@ -73,8 +95,13 @@ def retreive_exps(
                 sankoffs[str(l)].append(gt)
                 elves[str(l)].append(cost)
                 counts[str(l)] += 1
+                
+                if(run.config['seed'] not in seeds.keys()):
+                    seeds[run.config['seed']] = 1
+                else:
+                    seeds[run.config['seed']] += 1
             
-    return errors, sankoffs, elves, counts
+    return errors, sankoffs, elves, counts, seeds
 
 with st.sidebar:
     ### Sidebar options to quert wandb
@@ -108,12 +135,12 @@ with st.sidebar:
     
 
 runs = api.runs(project)
-errors, sankoffs, elves, counts = retreive_exps(runs, leaves, incl_keywords, excl_keywords)
+errors, sankoffs, elves, counts, seeds = retreive_exps(runs, leaves, incl_keywords, excl_keywords)
 
 errors_percentages = {num_leaves: [abs(b - a)/a*100 for a, b in zip(sankoffs[num_leaves], elves[num_leaves])]
           for num_leaves in sankoffs}
     
-print_stats(counts)
+print_stats(counts, seeds)
 
 df = pd.DataFrame(columns=['Leaves', 'Mean Optimal Solution', 'Our Mean Solution', 'Mean Error', 'Mean Error %'])
 
