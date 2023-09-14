@@ -131,8 +131,8 @@ st.table(df)
 
 # Define the font and color styles
 font_family = "sans-serif"
-title_font_size = 18
-axis_font_size = 14
+title_font_size = 20
+axis_font_size = 16
 
 ## 12 colors
 colors = ['#1f77b4', '#ff7f0e','#2ca02c','#d62728', '#9467bd', '#8c564b','#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#ff0000', '#00ff00']
@@ -161,20 +161,43 @@ for idx, num_leaves in enumerate(sorted_keys):
                          yaxis='y1',
                          showlegend=False,
                          marker_color=colors[idx],
+                         marker_size=7,
                          line_width=2,
                          boxmean=True))
 
+fig.update_layout(
+    plot_bgcolor='rgba(230, 236, 245, 1)',  # This sets the background color of the plot area
+    paper_bgcolor='rgba(255, 255, 255, 1)',  # This sets the background color of the entire figure
+)
 
 fig.update_layout(xaxis=dict(title='Number of Leaves',
                              title_font=dict(family=font_family, size=title_font_size),
-                             tickfont=dict(family=font_family, size=axis_font_size),
-                             gridcolor='rgb(250,250,250)',
-                             gridwidth=1))
+                             tickfont=dict(family=font_family, size=16),
+                             gridcolor='rgb(255,255,255)',
+                             
+                             showgrid=True,  # Ensure vertical gridlines are shown
+                             tickvals=sorted_keys,  # This will ensure only specific ticks are shown
+                             ticktext=[str(k) for k in sorted_keys],  # This will show the exact tick labels you want
 
-fig.update_layout(yaxis=dict(title='Mean Δ (%)', side='left', title_standoff=15,
+                             gridwidth=2,
+                             showline=True,
+                             linewidth=2, 
+                             linecolor='white'
+                             )
+                  )
+
+fig.update_layout(yaxis=dict(title='Mean Δ (%)', side='left', title_standoff=25,
                              title_font=dict(family=font_family, size=title_font_size),
                              tickfont=dict(family=font_family, size=axis_font_size),
                              tickformat='.1f',
+                             gridcolor='rgb(255,255,255)',
+                             gridwidth=2,
+                             showline=True,
+                             linewidth=2, 
+                             linecolor='white',
+                             zeroline=True,  # Show the zero line for y-axis
+                             zerolinewidth=2,  # Set the zero line thickness for y-axis
+                             zerolinecolor='rgb(255,255,255)'  # Set the zero line color for y-axis
                              ))
 
 
