@@ -216,7 +216,7 @@ def enforce_graph(t_ : Float[Array, "nodes nodes"], s : Float, metadata = None, 
 
     row_max_val_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.max(ancestor_columns, axis = 1) - 1),2))
     tree_force_loss  = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(ancestor_columns, axis = 0) - 2),2))
-    self_loop_loss   = jnp.sum(jnp.power(s*jnp.abs(jnp.diag(t_[:-1,:-1]) - 1),2))
+    self_loop_loss   = jnp.sum(jnp.power(s*jnp.abs(jnp.diag(t_[:-1,:-1])),2))
     
     if(verbose):
         print("bifurcating tree_forcing_loss = ", tree_force_loss)
