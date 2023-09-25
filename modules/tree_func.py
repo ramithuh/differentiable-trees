@@ -72,9 +72,9 @@ def update_tree(params : Dict[str, Array], epoch : int = 0 ,  temp : Float = 1 )
     inf_matrix = inf_matrix.at[:n_ancestors, n_leaves:].set(perturbed_tree_params[:n_ancestors])
     inf_matrix = inf_matrix.at[shifted_upper_indices].set(perturbed_tree_params[n_ancestors:, :][upper_indices])
     
-    # Lower part; comment unless using entropy loss
-    #lower_triangle_values = 0 #perturbed_tree_params[n_ancestors:, :][lower_indices]
-    #inf_matrix = inf_matrix.at[shifted_lower_indices].set(lower_triangle_values)
+    #Lower part; comment unless using entropy loss
+    lower_triangle_values = perturbed_tree_params[n_ancestors:, :][lower_indices]
+    inf_matrix = inf_matrix.at[shifted_lower_indices].set(lower_triangle_values)
     
     inf_matrix = inf_matrix.at[-1,-1].set(1)
     
@@ -212,15 +212,15 @@ def enforce_graph(t_ : Float[Array, "nodes nodes"], s : Float, metadata = None, 
     # n_ancestors = metadata['n_ancestors']
 
 
-    ancestor_columns = t_[:-1, n_all - n_ancestors: n_all]
-    # scaling_vecotr = 
+    ancestor_columns = t_[:-1, n_all - n_ancestors: n_all] #ignores the last cell (root assumption)
 
-    tree_force_loss = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(ancestor_columns, axis = 0) - 2),2))
+    row_max_val_loss = jnp.sum(jnp.power(jnp.abs(jnp.max(ancestor_columns, axis = 1) - 1),2))
+    tree_force_loss  = jnp.sum(jnp.power(s*jnp.abs(jnp.sum(ancestor_columns, axis = 0) - 2),2))
     
     if(verbose):
         print("bifurcating tree_forcing_loss = ", tree_force_loss)
 
-    return tree_force_loss
+    return tree_force_loss + row_max_val_loss
 
 @jit
 def compute_surrogate_cost(sequences : Float[Array, "nodes seq_length letters"], tree : Float[Array, "nodes nodes"]) -> Float:
@@ -371,50 +371,50 @@ def compute_detailed_loss_optimized(tree_params : Dict[str, Array], seq_params :
 
     return cost, cost_surrogate, tree_force_loss, cross_entropy_loss, loss
 
-@jax.jit
-def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
-    """Computes the total loss for a given set of sequences and a tree
+# @jax.jit
+# def compute_loss_sankoff(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
+#     """Computes the total loss for a given set of sequences and a tree
 
-    Args:
-        params : contains the tree and seq trainable parameters
-        seqs   : sequences array. shape = (n_all, length, n_letters
-        base_tree : base tree with zeros
-        metadata (Dict) : contains the metadata
-        temp (Float) : temperature for the loss
-        verbose : returns individual loss item if True. Defaults to False.
+#     Args:
+#         params : contains the tree and seq trainable parameters
+#         seqs   : sequences array. shape = (n_all, length, n_letters
+#         base_tree : base tree with zeros
+#         metadata (Dict) : contains the metadata
+#         temp (Float) : temperature for the loss
+#         verbose : returns individual loss item if True. Defaults to False.
 
-    Returns:
-        cost : total loss
-    """    
-    n_leaves = metadata['n_leaves']
-    n_all    = metadata['n_all']
+#     Returns:
+#         cost : total loss
+#     """    
+#     n_leaves = metadata['n_leaves']
+#     n_all    = metadata['n_all']
 
     
-    if(metadata['args']['fix_tree']):
-        t_ = base_tree
-    else:   
-        t_ = update_tree_sankoff(params, base_tree)
+#     if(metadata['args']['fix_tree']):
+#         t_ = base_tree
+#     else:   
+#         t_ = update_tree_sankoff(params, base_tree)
     
-    recurse_cost = 0 #_h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
+#     recurse_cost = 0 #_h_det(t_)*100 #compute_cost_recursive(t_, verbose = False)
     
-    cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters']).astype(jnp.float64)
-    _, cost_surrogate_sankoff = run_diff_sankoff(t_, cost_mat, jnp.argmax(seqs, axis = 2), metadata, epsilon = (0.145e-1)/(1+temp))
+#     cost_mat = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.eye(metadata['n_letters']).astype(jnp.float64)
+#     _, cost_surrogate_sankoff = run_diff_sankoff(t_, cost_mat, jnp.argmax(seqs, axis = 2), metadata, epsilon = (0.145e-1)/(1+temp))
     
    
 
-    tree_force_loss = enforce_graph(t_,10,metadata)
+#     tree_force_loss = enforce_graph(t_,10,metadata)
     
-    loss = cost_surrogate_sankoff #+ 100*tree_force_loss #+ temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost)
+#     loss = cost_surrogate_sankoff #+ 100*tree_force_loss #+ temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost)
 
-    if(verbose):
-        _, _, cost = run_sankoff(discretize_tree_topology(t_, n_all), cost_mat, jnp.argmax(seqs, axis = 2), metadata, return_path = False)
-        #compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
-        return cost, cost_surrogate_sankoff, tree_force_loss, loss
+#     if(verbose):
+#         _, _, cost = run_sankoff(discretize_tree_topology(t_, n_all), cost_mat, jnp.argmax(seqs, axis = 2), metadata, return_path = False)
+#         #compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
+#         return cost, cost_surrogate_sankoff, tree_force_loss, loss
 
-    return loss
+#     return loss
 
 
-def compute_loss_upgma(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
+# def compute_loss_upgma(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], base_tree : Float[Array, "nodes nodes"], metadata : Dict, temp : Float, verbose = False) -> Float:
     """Computes the total loss for a given set of sequences and a tree
 
     Args:
