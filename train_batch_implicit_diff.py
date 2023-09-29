@@ -229,7 +229,7 @@ seq_params : Dict[str, Array] = {}
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
     print_critical_info("Initializing tree using groundtruth tree \n")
-    tree_params['t'] = tree[0:-1,n_leaves:]*100
+    tree_params['t'] = tree_params['t'].at[:].set(tree[0:-1,n_leaves:]*100)
     
 #### Add the ancestor sequences to the parameters
 for i in range(0, n_ancestors):
