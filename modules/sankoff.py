@@ -15,6 +15,13 @@ def softmin(x, epsilon = 1, axis = 0):
     c = jnp.max(-x*epsilon, axis = axis, keepdims=True)
     return -(jnp.log(jnp.mean(jnp.exp(-x*epsilon - c), axis = axis, keepdims = True ) - 1e-6) + c/epsilon)[...,-1]
 
+def _logsumexp(x, axis=None, mask=None):
+  if mask is None: return jax.nn.logsumexp(x,axis=axis)
+  else: return x.max(axis) + jnp.log(jnp.sum(mask * jnp.exp(x - x.max(axis,keepdims=True)),axis=axis))
+
+def _soft_maximum(x, temp, axis=None, mask=None):
+  return temp*_logsumexp(x/temp, axis, mask)
+
 # @partial(jax.jit, static_argnums=[5,6]) 
 def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_letters, verbose = False):
     '''
@@ -99,7 +106,7 @@ def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters,
     for node in range(n_leaves, n_all): ## loop all the ancestors in order
         
         ## consider topologically feasible candidates (slicing -> :node)
-        prob_children    = jax.nn.softmax(adj[:,node][:node]*5)*2 #softranks(adj[:,node][:node], epsilon = epsilon)/epsilon)*2 
+        prob_children    = adj[:,node][:node]#*5)*2 #softranks(adj[:,node][:node], epsilon = epsilon)/epsilon)*2 
         children_onehot  = jnp.eye(node,node).astype(jnp.float64)*prob_children
         
         #print(prob_children)
@@ -116,7 +123,8 @@ def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters,
         node_mix = cost_mat[::,::] + dp_sel[::, None]
         
         ans = node_mix * mask[::, None]
-        ans = softmin(ans, epsilon, axis = 2) #-nn.logsumexp(-ans/epsilon, axis = 2)*epsilon
+        ans = -_soft_maximum(-ans, epsilon, axis = 2)
+        #softmin(ans, epsilon, axis = 2) #-nn.logsumexp(-ans/epsilon, axis = 2)*epsilon
         ans = jnp.sum(ans, axis = 0) + delta #penalize more if connections are not rigid
 
         dp = dp.at[node,::].set(ans)
@@ -163,11 +171,12 @@ def run_diff_sankoff(adj, cost_mat, seq, metadata, epsilon = 1e-5):
     seq = seq.astype(jnp.float64)
     cost_mat = cost_mat.astype(jnp.float64)
     
-    n_letters = metadata['n_letters']
-    n_leaves  = metadata['n_leaves']
+    n_all = adj.shape[0]
+    n_letters = cost_mat.shape[0]
+    n_leaves  = (n_all + 1)//2
     
     ##empty dp table
-    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters)).astype(jnp.float64)*1e5
+    dp       = jnp.ones((seq.shape[1], n_all, n_letters)).astype(jnp.float64)*1e5
     
     # connections = dp_nodes.copy()
         
@@ -184,12 +193,13 @@ def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
     cost_mat = cost_mat.astype(jnp.float64)
     
     
-    n_letters = metadata['n_letters']
-    n_leaves  = metadata['n_leaves']
+    n_all = adj.shape[0]
+    n_letters = cost_mat.shape[0]
+    n_leaves  = (n_all + 1)//2
     
     ##empty dp tables
-    dp_nodes = jnp.zeros((seq.shape[1], metadata['n_all'], n_letters, 4)).astype(jnp.float64)
-    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters)).astype(jnp.float64)*1e5
+    dp_nodes = jnp.zeros((seq.shape[1], n_all, n_letters, 4)).astype(jnp.float64)
+    dp       = jnp.ones((seq.shape[1], n_all, n_letters)).astype(jnp.float64)*1e5
     
     # connections = dp_nodes.copy()
         
