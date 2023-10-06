@@ -1,8 +1,10 @@
 import subprocess
 import os
 import math
+import jax
         
 print("Which GPU do you want to restrict to?")
+print(jax.devices('gpu'))
 id = input()
 os.environ["CUDA_VISIBLE_DEVICES"] = str(id)
 
@@ -14,7 +16,7 @@ print("Any notes for this batch run?")
 note = input()
 
 # Define the list of seeds you want to use
-seeds = [x+51 for x in range(1)]#[::-1]
+seeds = [x+42 for x in range(10)]#[::-1]
 
 # Define the leaf complexity you want to use
 print("which leaf complexity do you want to use?")
