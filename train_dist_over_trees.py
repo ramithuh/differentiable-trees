@@ -41,11 +41,14 @@ from modules.sankoff import *
 from arg_parser_v2 import *
 
 
-def generate_vmap_keys(seq_params):
+def generate_vmap_keys(params):
     vmap_keys = {}
     
-    for key in seq_params.keys():
-        vmap_keys[key] = None
+    for key in params.keys():
+        if(key!='t'):
+            vmap_keys[key] = None
+        else:
+            vmap_keys[key] = 0
         
     return vmap_keys
 
@@ -58,40 +61,18 @@ def remove_batch_dim(seq_params):
     return new_params
 
 @jit
-def get_one_tree_and_seq(tree_params, seq_params, pos):
+def get_one_tree_and_seq(params, pos):
+    print(params.keys())
     new_params = {}
-    ## extract correct tree
-    new_params['t'] = tree_params['t'][pos]
     
-    for i in range(0, len(seq_params.keys())):
-        # there's only one set of sequences
-        new_params[str(i)] = seq_params[str(i)]
+    ## extract the specified tree
+    new_params['t'] = params['t'][pos]
+    
+    for i in range(0, len(params.keys()) - 1):
+        # there's only one set of sequences, so no need to index
+        new_params[str(i)] = params[str(i)]
     
     return new_params
-
-
-def inner_objective(seq_params, tree_params, data):
-    seqs, metadata, temp, epoch = data
-    return compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp, epoch)
-
-
-def inner_loop_solver(seq_params, tree_params, data):
-    seqs, metadata, temp, epoch = data
-    
-    inner_opt_state = seq_optimizer.init_state(seq_params, tree_params, data)
-
-    for i in range(0, seq_optimizer.maxiter):
-        seq_params, inner_opt_state = jitted_seq_update(seq_params, inner_opt_state, tree_params, data)
-
-    return seq_params
-
-
-def outer_objective(tree_params, seq_params, data):
-    seqs, metadata, temp, epoch = data
-    seq_params = inner_loop_solver(seq_params, tree_params, data)
-    return compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp, epoch), seq_params
-
-
 
 ## Parse Command Line Arguments and perform checks
 args = vars(parse_args_v2())
@@ -229,17 +210,15 @@ initializer = jax.nn.initializers.kaiming_normal()
 
 
 ## Tree distribution : count = metadata['init_count']
-tree_params : Dict[str, Array] = {
+params : Dict[str, Array] = {
     't': initializer(key + offset, (metadata['init_count'], n_all - 1,n_ancestors), jnp.float64)
     }
-
-seq_params : Dict[str, Array] = {}
 
 
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
     print_critical_info("Initializing tree using groundtruth tree \n")
-    tree_params['t'] = tree[0:-1,n_leaves:]*100
+    params['t'] = tree[0:-1,n_leaves:]*100
 
     
 #### Add the ancestor sequences to the parameters (only one set for all trees)
@@ -250,38 +229,38 @@ for i in range(0, n_ancestors):
             raise NotImplementedError("Sankoff backtracking not implemented for n_leaves > 1024 due to execution time")
         else:
             print_critical_info("Initializing sequences using sankoff ancestors \n")
-            seq_params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.float64)*100
+            params[str(i)] = jax.nn.one_hot(sankoff_seqs[n_leaves + i], n_letters).astype(jnp.float64)*100
     else:
-        seq_params[str(i)] = initializer(key+i+offset, (seq_length, n_letters), jnp.float64)
+        # just one set of sequences
+        params[str(i)] = initializer(key+i+offset, (seq_length, n_letters), jnp.float64)
         #jax.random.normal(key+i+offset, (seq_length, n_letters)).astype(jnp.float64)
     
 #### Initialize the optimizer
 
-copy_seq_params = seq_params.copy()
 #eps_root = 1e-8, eps = 1e-8
 
-seq_optimizer = OptaxSolver(opt = optax.adam(metadata['lr_seq'], eps_root = 1e-16), fun = inner_objective, maxiter  = args['alternate_interval'], implicit_diff = True) 
-jitted_seq_update = jax.jit(seq_optimizer.update)
+optimizer = optax.adam(metadata['lr'])
+opt_state = optimizer.init(params)
 
-tree_optimizer = OptaxSolver(opt = optax.adam(metadata['lr'], eps_root = 1e-16), fun = outer_objective, has_aux = True) #, implicit_diff = True)
+## Organize how inputs are passed to the usual `compute_detailed_loss_optimized` function (i.e. parallelize over the multiple trees)
+# Generate dictionary for params; tree -> parallelize, seqs -> don't
+vmap_keys = generate_vmap_keys(params)
+mapped_compute_loss_optimized = jax.vmap(compute_loss_optimized, in_axes = (vmap_keys, None, None, None, None), out_axes = 0)
 
-vmap_tree_init = jax.vmap(tree_optimizer.init_state, (0, None, None),0)
-tree_opt_state = vmap_tree_init(tree_params, seq_params, [seqs, metadata, metadata['tLs'][0], 0])
-vmap_keys = generate_vmap_keys(seq_params)
+def tree_distribution_loss(params, seqs, metadata, temp, epoch):
+    val = mapped_compute_loss_optimized(params, seqs, metadata, temp, epoch)
+    loss = jnp.sum(val)
+    return loss 
 
-jitted_tree_update = jit(vmap(tree_optimizer.update, (0, 0, None, None),0))
-
-
-vmap_compute_detailed_loss_optimized =  jit(vmap(compute_detailed_loss_optimized, ({'t':0}, vmap_keys, None, None, None, None, None),0))
+vmap_compute_detailed_loss_optimized =  jit(vmap(compute_detailed_loss_optimized, (vmap_keys, None, None, None, None, None),0))
 
 
 fixed_dummy_pos = 0 
 
-params = get_one_tree_and_seq(tree_params, seq_params, fixed_dummy_pos)
-
-fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params), n_all),n_leaves, return_img = True)
-
-compute_loss(params, seqs, base_tree, metadata, metadata['tLs'][0])
+## Get one set of tree and seq
+params_ = get_one_tree_and_seq(params, fixed_dummy_pos)
+fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params_), n_all),n_leaves, return_img = True)
+compute_loss(params_, seqs, base_tree, metadata, metadata['tLs'][0])
 
 
 best_ans = 1e9
@@ -289,9 +268,8 @@ best_seq = None
 best_tree = None
 
 pos = 0
-#### Training loop
 
-seq_params = remove_batch_dim(tree_opt_state.aux)
+#### Optimization loop
 for _ in range(metadata['epochs']):
 
     if(_%200==0):
@@ -299,7 +277,7 @@ for _ in range(metadata['epochs']):
         if(args['fix_tree']): 
             t_ = base_tree
         else:
-            t_ = update_tree(params, _, metadata['tLs'][0])
+            t_ = update_tree(params_, _, metadata['tLs'][0])
         t_d           = discretize_tree_topology(t_,n_all)
         tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, return_img = True)
         tree_matrix_at_epoch = px.imshow(t_, text_auto=True)
@@ -308,28 +286,30 @@ for _ in range(metadata['epochs']):
         if(args['fix_seqs']):
             seqs_ = seqs
         else:
-            seqs_ = update_seq(params, seqs, metadata['seq_temp'])
+            seqs_ = update_seq(params_, seqs, metadata['seq_temp'])
         new_seq = px.imshow(jnp.argmax(seqs_, axis = 2), text_auto=True)
         
     
-    #=> Update the parameters
-    tree_params, tree_opt_state = jitted_tree_update(tree_params, tree_opt_state, seq_params, [seqs, metadata, metadata['tLs'][0],_])
-    seq_params = remove_batch_dim(tree_opt_state.aux)
-
-
-    cost, cost_surrogate, tree_force_loss, entropy_loss, loss = vmap_compute_detailed_loss_optimized(tree_params, seq_params, seqs, metadata, metadata['tLs'][0], sm,  _)
+    #compute gradients
+    grads = jax.grad(tree_distribution_loss)(params, seqs, metadata, metadata['tLs'][0], _)
+   
+    cost, cost_surrogate, tree_force_loss, entropy_loss, loss = vmap_compute_detailed_loss_optimized(params, seqs, metadata, metadata['tLs'][0], sm,  _)
+    
+    updates, opt_state = optimizer.update(grads, opt_state)
+    params             = optax.apply_updates(params, updates)
+    
     pos = jnp.argmin(cost)
     
-    params = get_one_tree_and_seq(tree_params, seq_params, pos)
+    params_ = get_one_tree_and_seq(params,pos)
     
     if(cost.min() < best_ans):
         if(_%100==0):
             print_success_info("Found a better tree at epoch %d with cost %f from tree %d. (delta at epoch = %d) \n" % (_, cost.min(), pos, cost.max()-cost.min()))
         best_ans = cost.min()
         
-        t_ = update_tree(params, _, metadata['tLs'][0])
+        t_ = update_tree(params_, _, metadata['tLs'][0])
         best_tree = discretize_tree_topology(t_,n_all)
-        best_seq = update_seq(params, seqs, metadata['seq_temp'])
+        best_seq = update_seq(params_, seqs, metadata['seq_temp'])
         
         ## Log the metrics
     if(_%200==0):
