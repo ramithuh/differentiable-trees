@@ -203,7 +203,9 @@ if(args['groundtruth']):
 
 
 #### Define parameters (t and the ancestor sequences)
-initializer = jax.nn.initializers.kaiming_normal()
+initializer = jax.nn.initializers.orthogonal()
+
+#jax.nn.initializers.kaiming_normal()
 #jax.nn.initializers.orthogonal()
 #jax.nn.initializers.kaiming_normal()
 #jax.nn.initializers.orthogonal()
@@ -211,15 +213,20 @@ initializer = jax.nn.initializers.kaiming_normal()
 
 ## Tree distribution : count = metadata['init_count']
 params : Dict[str, Array] = {
-    't': initializer(key + offset, (metadata['init_count'], n_all - 1,n_ancestors), jnp.float64)
+    't': initializer(key + offset, (metadata['init_count'], n_all - 1,n_ancestors), jnp.float64)*10
     }
 
 
 ## Manually override the parameters such that the updated tree is the same as the base tree
 if(args['initialize_tree']):
     print_critical_info("Initializing tree using groundtruth tree \n")
-    params['t'] = tree[0:-1,n_leaves:]*100
+    
+    params['t'] = jnp.zeros((metadata['init_count'], n_all - 1,n_ancestors))
+    params['t'] = params['t'].at[:,].set(tree[0:-1,n_leaves:]*100)
 
+print("HMMM")
+print(params['t'][0])
+print("end HMMM")
     
 #### Add the ancestor sequences to the parameters (only one set for all trees)
 for i in range(0, n_ancestors):
@@ -253,7 +260,8 @@ def tree_distribution_loss(params, seqs, metadata, temp, epoch):
     return loss 
 
 vmap_compute_detailed_loss_optimized =  jit(vmap(compute_detailed_loss_optimized, (vmap_keys, None, None, None, None, None),0))
-
+vmap_update_tree = vmap(update_tree, (vmap_keys, None, None), 0)
+vmap_discretize_tree_topology = vmap(discretize_tree_topology, (0, None), 0)
 
 fixed_dummy_pos = 0 
 
@@ -272,21 +280,21 @@ pos = 0
 #### Optimization loop
 for _ in range(metadata['epochs']):
 
-    if(_%200==0):
+    if(_%5==0):
         ###~ Get the current discretized tree
         if(args['fix_tree']): 
             t_ = base_tree
         else:
-            t_ = update_tree(params_, _, metadata['tLs'][0])
-        t_d           = discretize_tree_topology(t_,n_all)
-        tree_at_epoch        = show_graph_with_labels(t_d, n_leaves, return_img = True)
-        tree_matrix_at_epoch = px.imshow(t_, text_auto=True)
+            t_ = vmap_update_tree(params, _, metadata['tLs'][0])
+        t_d           = vmap_discretize_tree_topology(t_,n_all)
+        tree_at_epoch        = show_graph_with_labels(t_d[0], n_leaves, return_img = True)
+        tree_matrix_at_epoch = [wandb.Image(np.asarray(t_[idx])) for idx in range(0, t_.shape[0])]
 
         ###~ Get the current sequences as a plot
         if(args['fix_seqs']):
             seqs_ = seqs
         else:
-            seqs_ = update_seq(params_, seqs, metadata['seq_temp'])
+            seqs_ = update_seq(params, seqs, metadata['seq_temp'])
         new_seq = px.imshow(jnp.argmax(seqs_, axis = 2), text_auto=True)
         
     
@@ -298,8 +306,8 @@ for _ in range(metadata['epochs']):
     updates, opt_state = optimizer.update(grads, opt_state)
     params             = optax.apply_updates(params, updates)
     
+    # extracting best tree for logging
     pos = jnp.argmin(cost)
-    
     params_ = get_one_tree_and_seq(params,pos)
     
     if(cost.min() < best_ans):
@@ -312,7 +320,7 @@ for _ in range(metadata['epochs']):
         best_seq = update_seq(params_, seqs, metadata['seq_temp'])
         
         ## Log the metrics
-    if(_%200==0):
+    if(_%5==0):
         wandb.log(
             {"epoch":_, 
 
@@ -323,12 +331,12 @@ for _ in range(metadata['epochs']):
             "entropy loss": entropy_loss[pos],
             
             "tree":wandb.Image(tree_at_epoch),
-            "tree matrix":wandb.data_types.Plotly(tree_matrix_at_epoch),
+            "tree matrix":[curr_tree for curr_tree in tree_matrix_at_epoch] ,
             "Seq":wandb.data_types.Plotly(new_seq),
             "last ancestor" :  wandb.data_types.Plotly(px.imshow((seqs_[-1]), text_auto=True)),
             "tLs":metadata['tLs'][0],})
 
-    if(_%200==0):
+    if(_%5==0):
         print_bold_info(f"epoch {_}")
         print("{:.3f}".format(metadata['tLs'][0]), end = " ")
         print("{:.3f}".format(loss[pos].item()), end=" ")
