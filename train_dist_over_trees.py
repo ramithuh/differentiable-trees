@@ -213,7 +213,7 @@ initializer = jax.nn.initializers.orthogonal()
 
 ## Tree distribution : count = metadata['init_count']
 params : Dict[str, Array] = {
-    't': initializer(key + offset, (metadata['init_count'], n_all - 1,n_ancestors), jnp.float64)*10
+    't': initializer(key + offset, (metadata['init_count'], n_all - 1,n_ancestors), jnp.float64)
     }
 
 
@@ -280,7 +280,7 @@ pos = 0
 #### Optimization loop
 for _ in range(metadata['epochs']):
 
-    if(_%5==0):
+    if(_%50==0):
         ###~ Get the current discretized tree
         if(args['fix_tree']): 
             t_ = base_tree
@@ -320,7 +320,7 @@ for _ in range(metadata['epochs']):
         best_seq = update_seq(params_, seqs, metadata['seq_temp'])
         
         ## Log the metrics
-    if(_%5==0):
+    if(_%50==0):
         wandb.log(
             {"epoch":_, 
 
@@ -336,7 +336,7 @@ for _ in range(metadata['epochs']):
             "last ancestor" :  wandb.data_types.Plotly(px.imshow((seqs_[-1]), text_auto=True)),
             "tLs":metadata['tLs'][0],})
 
-    if(_%5==0):
+    if(_%50==0):
         print_bold_info(f"epoch {_}")
         print("{:.3f}".format(metadata['tLs'][0]), end = " ")
         print("{:.3f}".format(loss[pos].item()), end=" ")
