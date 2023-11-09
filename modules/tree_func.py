@@ -305,7 +305,7 @@ def compute_loss(params : Dict[str, Array], seqs : Float[Array, "nodes length le
     return loss
 
 @jit
-def compute_loss_optimized(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], metadata : Dict, temp : Float, epoch : int) -> Float:
+def compute_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], metadata : Dict, temp : Float, epoch : int) -> Float:
     """Computes the total loss for a given set of sequences and a tree
 
     Args:
@@ -322,9 +322,9 @@ def compute_loss_optimized(params : Dict[str, Array], seqs : Float[Array, "nodes
     n_leaves = metadata['n_leaves']
     n_all    = metadata['n_all']
 
-    seqs_ = update_seq(params, seqs, temp )
+    seqs_ = update_seq(seq_params, seqs, temp )
     
-    t_ = update_tree(params, epoch, temp)
+    t_ = update_tree(tree_params, epoch, temp)
     
 
     cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
@@ -338,7 +338,7 @@ def compute_loss_optimized(params : Dict[str, Array], seqs : Float[Array, "nodes
     return loss
 
 @jit
-def compute_detailed_loss_optimized(params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], metadata : Dict, temp : Float, sm : Float[Array, "letters letters"], epoch : int = 0) -> Float:
+def compute_detailed_loss_optimized(tree_params : Dict[str, Array], seq_params : Dict[str, Array], seqs : Float[Array, "nodes length letters"], metadata : Dict, temp : Float, sm : Float[Array, "letters letters"], epoch : int = 0) -> Float:
     """Computes the total loss for a given set of sequences and a tree
 
     Args:
@@ -355,9 +355,9 @@ def compute_detailed_loss_optimized(params : Dict[str, Array], seqs : Float[Arra
     n_leaves = metadata['n_leaves']
     n_all    = metadata['n_all']
 
-    seqs_ = update_seq(params, seqs, temp )
+    seqs_ = update_seq(seq_params, seqs, temp )
     
-    t_ = update_tree(params, epoch, temp)
+    t_ = update_tree(tree_params, epoch, temp)
     
 
     cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
@@ -370,45 +370,3 @@ def compute_detailed_loss_optimized(params : Dict[str, Array], seqs : Float[Arra
     cost = compute_cost(seqs_,t_, sm) # real traversal cost
 
     return cost, cost_surrogate, tree_force_loss, cross_entropy_loss, loss
-
-
-    """Computes the total loss for a given set of sequences and a tree
-
-    Args:
-        params : contains the tree and seq trainable parameters
-        seqs   : sequences array. shape = (n_all, length, n_letters
-        base_tree : base tree with zeros
-        metadata (Dict) : contains the metadata
-        temp (Float) : temperature for the loss
-        verbose : returns individual loss item if True. Defaults to False.
-
-    Returns:
-        cost : total loss
-    """    
-    n_leaves = metadata['n_leaves']
-    n_all    = metadata['n_all']
-
-    if(metadata['args']['fix_seqs']):
-        seqs_ = seqs
-    else:
-        seqs_ = update_seq(params, seqs, temp )
-    
-    if(metadata['args']['fix_tree']):
-        t_ = base_tree
-    else:   
-        t_ = differentiable_upgma(params['t'], [0.1, 1, 0.5+temp])#update_tree(params, base_tree)
-    
-    
-    recurse_cost = 0 #compute_cost_recursive(t_, verbose = False)
-
-    cost_surrogate = compute_cost(seqs_,t_, metadata) # surrogate traversal cost
-    
-    tree_force_loss, loop_loss, bidirection_loss = 0.0, 0.0, 0.0 #enforce_graph(t_,10,metadata)
-    
-    loss = cost_surrogate #+ temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost*500)
-
-    if(verbose):
-        cost           = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
-        return cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss
-
-    return loss
