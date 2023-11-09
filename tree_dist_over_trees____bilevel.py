@@ -51,6 +51,7 @@ def generate_vmap_keys(params):
     return vmap_keys
 
 
+
 def inner_objective(seq_params, tree_params, data):
     seqs, metadata, temp, epoch = data
     return tree_distribution_loss(tree_params, seq_params, seqs, metadata, temp, epoch)
@@ -263,31 +264,25 @@ for i in range(0, n_ancestors):
         seq_params[str(i)] = initializer(key+i+offset, (seq_length, n_letters), jnp.float64)
         #jax.random.normal(key+i+offset, (seq_length, n_letters)).astype(jnp.float64)
     
-#### Initialize the optimizer
-
-#eps_root = 1e-8, eps = 1e-8
-
-# optimizer = optax.adam(metadata['lr'])
-# opt_state = optimizer.init(params)
-
-
-tree_optimizer = OptaxSolver(opt = optax.adam(0.1, eps_root = 1e-16), fun = outer_objective, has_aux = True) #, implicit_diff = True)
-seq_optimizer  = OptaxSolver(opt = optax.adam(0.1, eps_root = 1e-16), fun = inner_objective, maxiter  = 10, implicit_diff = True) 
-jitted_seq_update = jax.jit(seq_optimizer.update)
-
-tree_init      = tree_optimizer.init_state
-tree_opt_state = tree_init(tree_params, seq_params)
-jitted_tree_update = tree_optimizer.update
-
-## Organize how inputs are passed to the usual `compute_detailed_loss_optimized` function (i.e. parallelize over the multiple trees)
-# Generate dictionary for params; tree -> parallelize, seqs -> don't
-vmap_keys = generate_vmap_keys(params)
+vmap_keys = generate_vmap_keys(seq_params)
 mapped_compute_loss_optimized = jax.vmap(compute_loss_optimized, in_axes = ({'t': 0}, vmap_keys, None, None, None, None), out_axes = 0)
 
 def tree_distribution_loss(tree_params, seq_params, seqs, metadata, temp, epoch):
     val = mapped_compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp, epoch)
     loss = jnp.sum(val)
-    return loss 
+    return loss
+
+#### Initialize the optimizer
+tree_optimizer = OptaxSolver(opt = optax.adam(0.1, eps_root = 1e-16), fun = outer_objective, has_aux = True) #, implicit_diff = True)
+seq_optimizer  = OptaxSolver(opt = optax.adam(0.1, eps_root = 1e-16), fun = inner_objective, maxiter  = 10, implicit_diff = True) 
+jitted_seq_update = jax.jit(seq_optimizer.update)
+
+tree_init      = tree_optimizer.init_state
+tree_opt_state = tree_init(tree_params, seq_params, [seqs, metadata, metadata['tLs'][0], 0])
+jitted_tree_update = tree_optimizer.update
+
+## Organize how inputs are passed to the usual `compute_detailed_loss_optimized` function (i.e. parallelize over the multiple trees)
+# Generate dictionary for params; tree -> parallelize, seqs -> don't
 
 vmap_compute_detailed_loss_optimized =  jit(vmap(compute_detailed_loss_optimized, ({'t': 0}, vmap_keys, None, None, None, None, None),0))
 vmap_update_tree = vmap(update_tree, (vmap_keys, None, None), 0)
