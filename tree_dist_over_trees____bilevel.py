@@ -81,16 +81,13 @@ def remove_batch_dim(seq_params):
     return new_params
 
 @jit
-def get_one_tree_and_seq(params, pos):
-    print(params.keys())
+def get_one_tree_and_seq(tree_params, seq_params, pos):
     new_params = {}
+    ## extract correct tree
+    new_params['t'] = tree_params['t'][pos]
     
-    ## extract the specified tree
-    new_params['t'] = params['t'][pos]
-    
-    for i in range(0, len(params.keys()) - 1):
-        # there's only one set of sequences, so no need to index
-        new_params[str(i)] = params[str(i)]
+    for i in range(0, len(seq_params.keys())):
+        new_params[str(i)] = seq_params[str(i)][pos]
     
     return new_params
 
@@ -264,10 +261,11 @@ for i in range(0, n_ancestors):
         seq_params[str(i)] = initializer(key+i+offset, (seq_length, n_letters), jnp.float64)
         #jax.random.normal(key+i+offset, (seq_length, n_letters)).astype(jnp.float64)
     
-vmap_keys = generate_vmap_keys(seq_params)
-mapped_compute_loss_optimized = jax.vmap(compute_loss_optimized, in_axes = ({'t': 0}, vmap_keys, None, None, None, None), out_axes = 0)
+vmap_seq_keys = generate_vmap_keys(seq_params)
+mapped_compute_loss_optimized = jax.vmap(compute_loss_optimized, in_axes = ({'t': 0}, vmap_seq_keys, None, None, None, None), out_axes = 0)
 
 def tree_distribution_loss(tree_params, seq_params, seqs, metadata, temp, epoch):
+    ## for each tree compute the loss and take the sum
     val = mapped_compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp, epoch)
     loss = jnp.sum(val)
     return loss
@@ -284,14 +282,14 @@ jitted_tree_update = tree_optimizer.update
 ## Organize how inputs are passed to the usual `compute_detailed_loss_optimized` function (i.e. parallelize over the multiple trees)
 # Generate dictionary for params; tree -> parallelize, seqs -> don't
 
-vmap_compute_detailed_loss_optimized =  jit(vmap(compute_detailed_loss_optimized, ({'t': 0}, vmap_keys, None, None, None, None, None),0))
-vmap_update_tree = vmap(update_tree, (vmap_keys, None, None), 0)
+vmap_compute_detailed_loss_optimized =  jit(vmap(compute_detailed_loss_optimized, ({'t': 0}, vmap_seq_keys, None, None, None, None, None),0))
+vmap_update_tree = vmap(update_tree, ({'t': 0}, None, None), 0)
 vmap_discretize_tree_topology = vmap(discretize_tree_topology, (0, None), 0)
 
 fixed_dummy_pos = 0 
 
 ## Get one set of tree and seq
-params_ = get_one_tree_and_seq(params, fixed_dummy_pos)
+params_ = get_one_tree_and_seq(tree_params, seq_params, fixed_dummy_pos)
 fig2 = show_graph_with_labels(discretize_tree_topology(update_tree(params_), n_all),n_leaves, return_img = True)
 compute_loss(params_, seqs, base_tree, metadata, metadata['tLs'][0])
 
@@ -310,7 +308,7 @@ for _ in range(metadata['epochs']):
         if(args['fix_tree']): 
             t_ = base_tree
         else:
-            t_ = vmap_update_tree(params, _, metadata['tLs'][0])
+            t_ = vmap_update_tree(tree_params, _, metadata['tLs'][0])
         t_d           = vmap_discretize_tree_topology(t_,n_all)
         tree_at_epoch        = show_graph_with_labels(t_d[0], n_leaves, return_img = True)
         tree_matrix_at_epoch = [wandb.Image(np.asarray(t_[idx])) for idx in range(0, t_.shape[0])]
@@ -319,7 +317,7 @@ for _ in range(metadata['epochs']):
         if(args['fix_seqs']):
             seqs_ = seqs
         else:
-            seqs_ = update_seq(params, seqs, metadata['seq_temp'])
+            seqs_ = update_seq(seq_params, seqs, metadata['seq_temp'])
         new_seq = px.imshow(jnp.argmax(seqs_, axis = 2), text_auto=True)
         
     
@@ -330,7 +328,7 @@ for _ in range(metadata['epochs']):
     
     #=> Update the parameters
     tree_params, tree_opt_state = jitted_tree_update(tree_params, tree_opt_state, seq_params, [seqs, metadata, metadata['tLs'][0],_])
-    seq_params = remove_batch_dim(tree_opt_state.aux)
+    seq_params = tree_opt_state.aux
 
 
     cost, cost_surrogate, tree_force_loss, entropy_loss, loss = vmap_compute_detailed_loss_optimized(tree_params, seq_params, seqs, metadata, metadata['tLs'][0], sm,  _)
