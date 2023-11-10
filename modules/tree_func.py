@@ -72,9 +72,9 @@ def update_tree(params : Dict[str, Array], epoch : int = 0 ,  temp : Float = 1 )
     inf_matrix = inf_matrix.at[:n_ancestors, n_leaves:].set(perturbed_tree_params[:n_ancestors])
     inf_matrix = inf_matrix.at[shifted_upper_indices].set(perturbed_tree_params[n_ancestors:, :][upper_indices])
     
-    # Lower part; comment if you want No nevada
-    lower_triangle_values = perturbed_tree_params[n_ancestors:, :][lower_indices]
-    inf_matrix = inf_matrix.at[shifted_lower_indices].set(lower_triangle_values)
+    # Lower part; comment if you want 'nevada'
+    # lower_triangle_values = perturbed_tree_params[n_ancestors:, :][lower_indices]
+    # inf_matrix = inf_matrix.at[shifted_lower_indices].set(lower_triangle_values)
     
     inf_matrix = inf_matrix.at[-1,-1].set(1)
     

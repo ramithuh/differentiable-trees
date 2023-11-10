@@ -242,10 +242,6 @@ if(args['initialize_tree']):
     
     tree_params['t'] = jnp.zeros((metadata['init_count'], n_all - 1,n_ancestors))
     tree_params['t'] = params['t'].at[:,].set(tree[0:-1,n_leaves:]*100)
-
-print("HMMM")
-print(tree_params['t'][0])
-print("end HMMM")
     
 #### Add the ancestor sequences to the parameters (only one set for all trees)
 for i in range(0, n_ancestors):
