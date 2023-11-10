@@ -268,7 +268,7 @@ def tree_distribution_loss(tree_params, seq_params, seqs, metadata, temp, epoch)
 
 #### Initialize the optimizer
 tree_optimizer = OptaxSolver(opt = optax.adam(0.1, eps_root = 1e-16), fun = outer_objective, has_aux = True) #, implicit_diff = True)
-seq_optimizer  = OptaxSolver(opt = optax.adam(0.1, eps_root = 1e-16), fun = inner_objective, maxiter  = 10, implicit_diff = True) 
+seq_optimizer  = OptaxSolver(opt = optax.adam(0.1, eps_root = 1e-16), fun = inner_objective, maxiter  = args['alternate_interval'], implicit_diff = True) 
 jitted_seq_update = jax.jit(seq_optimizer.update)
 
 tree_init      = tree_optimizer.init_state
