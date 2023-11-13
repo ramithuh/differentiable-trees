@@ -203,7 +203,8 @@ if(args['groundtruth']):
 
 
 #### Define parameters (t and the ancestor sequences)
-initializer = jax.nn.initializers.orthogonal()
+# initializer = jax.nn.initializers.orthogonal()
+initializer = jax.nn.initializers.normal(5)
 
 #jax.nn.initializers.kaiming_normal()
 #jax.nn.initializers.orthogonal()
@@ -285,7 +286,7 @@ def _norm_msa_grad(g):
   g = g * jnp.sqrt(g.shape[1]) / (gn + 1e-7) 
   return g
 
-# @jax.jit
+@jax.jit
 def scale_grads(grad):
     # scale gradients
     new_grads = grad.copy()

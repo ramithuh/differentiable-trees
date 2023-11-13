@@ -58,7 +58,7 @@ def update_tree(params : Dict[str, Array], epoch : int = 0 ,  temp : Float = 1 )
     key = jax.random.PRNGKey(epoch) # generate a random key
     gumbel_noise = jax.random.gumbel(key, (tree.shape[0], tree.shape[1])) # generate gumbel noise
 
-    perturbed_tree_params = tree + gumbel_noise*0.0 # add gumbel noise to the tree params
+    perturbed_tree_params = tree + gumbel_noise*1.0 # add gumbel noise to the tree params
 
     inf_matrix = -jnp.ones((n_all, n_all))*jnp.inf
                     
