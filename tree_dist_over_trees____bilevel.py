@@ -50,12 +50,10 @@ def generate_vmap_keys(params):
         
     return vmap_keys
 
-
-
+@jax.jit
 def inner_objective(seq_params, tree_params, data):
     seqs, metadata, temp, epoch = data
     return tree_distribution_loss(tree_params, seq_params, seqs, metadata, temp, epoch)
-
 
 def inner_loop_solver(seq_params, tree_params, data):
     seqs, metadata, temp, epoch = data
@@ -67,20 +65,13 @@ def inner_loop_solver(seq_params, tree_params, data):
 
     return seq_params
 
+@jax.jit
 def outer_objective(tree_params, seq_params, data):
     seqs, metadata, temp, epoch = data
     seq_params = inner_loop_solver(seq_params, tree_params, data)
     return tree_distribution_loss(tree_params, seq_params, seqs, metadata, temp, epoch), seq_params
 
-@jit
-def remove_batch_dim(seq_params):
-    new_params = {}
-    for i in range(0, len(seq_params.keys())):
-        new_params[str(i)] = seq_params[str(i)][0]
-    
-    return new_params
-
-@jit
+@jax.jit
 def get_one_tree_and_seq(tree_params, seq_params, pos):
     new_params = {}
     ## extract correct tree
@@ -273,7 +264,7 @@ jitted_seq_update = jax.jit(seq_optimizer.update)
 
 tree_init      = tree_optimizer.init_state
 tree_opt_state = tree_init(tree_params, seq_params, [seqs, metadata, metadata['tLs'][0], 0])
-jitted_tree_update = tree_optimizer.update
+jitted_tree_update = jax.jit(tree_optimizer.update)
 
 ## Organize how inputs are passed to the usual `compute_detailed_loss_optimized` function (i.e. parallelize over the multiple trees)
 # Generate dictionary for params; tree -> parallelize, seqs -> don't
