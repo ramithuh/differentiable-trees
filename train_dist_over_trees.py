@@ -1,6 +1,6 @@
 from jax import config
 config.update("jax_enable_x64", True)
-config.update("jax_debug_nans", True)
+# config.update("jax_debug_nans", True)
 
 import os
 import sys
@@ -277,6 +277,51 @@ best_tree = None
 
 pos = 0
 
+
+@jax.jit
+def _norm_msa_grad(g):
+  # g.shape = (N, L, A)
+  gn = jnp.linalg.norm(g,axis=(-1,-2),keepdims=True) # shape = (N,1,1)
+  g = g * jnp.sqrt(g.shape[1]) / (gn + 1e-7) 
+  return g
+
+# @jax.jit
+def scale_grads(grad):
+    # scale gradients
+    new_grads = grad.copy()
+    new_grads['t'] = grad['t'] #copy gradients of trees unchanged
+    
+    len_ = len(grad.keys()) - 1
+    
+    # first make a tensor out of the individual elements.
+    shape = grad['0'].shape 
+    
+
+    # msa = (N, L, A)
+    msa = jnp.empty((len_, shape[0], shape[1]))
+    for i in range(len_):
+        temp = grad[str(i)]
+        msa = msa.at[i].set(temp)
+        
+    msa_norm_grad = _norm_msa_grad(msa)
+    
+    for i in range(len_):
+        #copying corresponding normalized gradients to the new dictionary
+        temp = msa_norm_grad[i]
+        new_grads[str(i)] = temp
+
+    # if(_ < 1000):
+    #     print(grad['0'].shape)
+    #     print(grad['0'][0][:5])
+    #     print(grad['1'][1][:5])
+    #     print("----")
+    
+    #     print(new_grads['0'][0][:5])
+    #     print(new_grads['1'][0][:5])
+    #     print("......")
+    
+    return new_grads
+
 #### Optimization loop
 for _ in range(metadata['epochs']):
 
@@ -300,6 +345,7 @@ for _ in range(metadata['epochs']):
     
     #compute gradients
     grads = jax.grad(tree_distribution_loss)(params, seqs, metadata, metadata['tLs'][0], _)
+    grads = scale_grads(grads)
    
     cost, cost_surrogate, tree_force_loss, entropy_loss, loss = vmap_compute_detailed_loss_optimized(params, seqs, metadata, metadata['tLs'][0], sm,  _)
     
