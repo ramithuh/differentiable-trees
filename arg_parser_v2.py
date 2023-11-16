@@ -47,6 +47,11 @@ def parse_args_v2():
     parser.add_argument('-d','--delay_schedule' , help='delay the tree loss schedule', required=False, type = int, default = -1)
     parser.add_argument('-lr','--learning_rate'         , help='learning rate'    , required=False, type = float, default = 0.001)
     parser.add_argument('-lr_seq','--learning_rate_seq' , help='learning rate for seq' , required=False, type = float)
+    parser.add_argument('-initer','--initializer' , help='initializer' , required=True, type = str)
+
+    ## Gradient Normalization mode:
+    parser.add_argument('-ng', '--normalize_gradients', action='store_true', help='Normalize Gradients when training ?')
+    parser.set_defaults(normalize_gradients=False)
 
     ## what to train?
     parser.add_argument('-fs', '--fix_seqs', action='store_true', help='Fix sequences when training ?')
