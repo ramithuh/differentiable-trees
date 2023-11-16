@@ -104,6 +104,7 @@ metadata = {
     'epochs': args['epochs'],
     'tLs': args['tree_loss_schedule'],
     'init_count' : args['init_count'] if args['init_count']!=None else 1,
+    'initializer' : args['initializer']
     }
 
 wandb.login(key = os.environ.get('WANDB_API_KEY_so'))
@@ -126,9 +127,12 @@ metadata['args']['notes'] = None
 metadata['notes'] = None
 metadata['tags']  = None
 metadata['project'] = None
+init_func = metadata['initializer'][:]
+metadata['initializer'] = None
 args['notes'] = None
 args['tags'] = None
 args['project'] = None
+args['initializer'] = None
 
 #### Generate a random sequence of 0s and 1s
 key = jax.random.PRNGKey(metadata['seed'])
@@ -203,8 +207,12 @@ if(args['groundtruth']):
 
 
 #### Define parameters (t and the ancestor sequences)
-# initializer = jax.nn.initializers.orthogonal()
-initializer = jax.nn.initializers.normal(5)
+
+function_call = f"jax.nn.initializers.{init_func}"
+initializer = eval(function_call)
+
+# initializer = jax.nn.initializers.orthogonal(10)
+# initializer = jax.nn.initializers.normal(1)
 
 #jax.nn.initializers.kaiming_normal()
 #jax.nn.initializers.orthogonal()
@@ -286,7 +294,7 @@ def _norm_msa_grad(g):
   g = g * jnp.sqrt(g.shape[1]) / (gn + 1e-7) 
   return g
 
-@jax.jit
+# @jax.jit
 def scale_grads(grad):
     # scale gradients
     new_grads = grad.copy()
@@ -310,16 +318,6 @@ def scale_grads(grad):
         #copying corresponding normalized gradients to the new dictionary
         temp = msa_norm_grad[i]
         new_grads[str(i)] = temp
-
-    # if(_ < 1000):
-    #     print(grad['0'].shape)
-    #     print(grad['0'][0][:5])
-    #     print(grad['1'][1][:5])
-    #     print("----")
-    
-    #     print(new_grads['0'][0][:5])
-    #     print(new_grads['1'][0][:5])
-    #     print("......")
     
     return new_grads
 
@@ -346,7 +344,8 @@ for _ in range(metadata['epochs']):
     
     #compute gradients
     grads = jax.grad(tree_distribution_loss)(params, seqs, metadata, metadata['tLs'][0], _)
-    grads = scale_grads(grads)
+    if(args['normalize_gradients']):
+        grads = scale_grads(grads)
    
     cost, cost_surrogate, tree_force_loss, entropy_loss, loss = vmap_compute_detailed_loss_optimized(params, seqs, metadata, metadata['tLs'][0], sm,  _)
     
