@@ -294,7 +294,7 @@ def _norm_msa_grad(g):
   g = g * jnp.sqrt(g.shape[1]) / (gn + 1e-7) 
   return g
 
-# @jax.jit
+@jax.jit
 def scale_grads(grad):
     # scale gradients
     new_grads = grad.copy()
