@@ -130,31 +130,25 @@ def update_seq(params : Dict[str, Array], seqs : Float[Array, "nodes letters"], 
 
     n_all = seqs.shape[0]
     n_leaves = (n_all + 1)//2
+    n_letters = seqs.shape[-1]
 
+    # loop through ancestors
     for i in range(0, n_all - n_leaves):
         key = str(i) #chr(97+i + n_leaves)
         
-        # print(params[key].shape)
-        # print(seq.shape)
-        # break
+        print(params[key].shape)
+        print(seq.shape)
+        break
         seq      = nn.softmax(params[key]*temperature)
-        #hard_seq = (seq > 0.5).astype(int)
         
-        seqs = seqs.at[- n_leaves + i + 1].set(seq)
-        #seqs = seqs.at[- n_leaves + i + 1].set(jax.lax.stop_gradient(hard_seq - seq) + seq)
-    
-#     seq_1 = nn.sigmoid(temperature*params['d'])
-#     seq_2 = nn.sigmoid(temperature*params['e'])
-    
-#     hard_seq_1 = (seq_1 > 0.5).astype(int)
-#     hard_seq_2 = (seq_2 > 0.5).astype(int)
-    
-    
-    
-    
-#     seqs = seqs.at[-2].set(seq_1)
-#     seqs = seqs.at[-1].set(seq_2)
-    
+        # STE Trick
+        hard_seq = jax.nn.one_hot(jnp.argmax(seq, axis = -1), n_letters)
+
+        temp = jax.lax.stop_gradient(hard_seq - seq) + seq
+        seqs = seqs.at[- n_leaves + i + 1].set(temp)
+        
+        # Usual way
+        #seqs = seqs.at[- n_leaves + i + 1].set(seq)    
     return seqs
 
 @jit
