@@ -136,10 +136,10 @@ def update_seq(params : Dict[str, Array], seqs : Float[Array, "nodes letters"], 
     for i in range(0, n_all - n_leaves):
         key = str(i) #chr(97+i + n_leaves)
         
-        print(params[key].shape)
-        print(seq.shape)
-        break
-        seq      = nn.softmax(params[key]*temperature)
+        # print(params[key].shape)
+        # print(seq.shape)
+        # break
+        seq      = nn.softmax(params[key])
         
         # STE Trick
         hard_seq = jax.nn.one_hot(jnp.argmax(seq, axis = -1), n_letters)
