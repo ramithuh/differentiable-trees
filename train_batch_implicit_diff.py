@@ -30,6 +30,7 @@ from jax import vmap
 import jax.numpy as jnp
 from jax.lib import xla_bridge
 from jaxtyping import Array, Float
+from typing import NamedTuple
 
 if(os.path.exists('/content/sample_data')):
   sys.path.append('differentiable-trees/')
@@ -65,22 +66,30 @@ def inner_objective(seq_params, tree_params, data):
     seqs, metadata, temp, epoch = data
     return compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp, epoch)
 
+class Aux(NamedTuple):
+  """Stores auxiliary values computed during loss function eval for reuse."""
+  seq_params: Array
+  seq_params_history: list
 
 def inner_loop_solver(seq_params, tree_params, data):
     seqs, metadata, temp, epoch = data
     
     inner_opt_state = seq_optimizer.init_state(seq_params, tree_params, data)
-
+    seq_params_history = []
+    
     for i in range(0, seq_optimizer.maxiter):
         seq_params, inner_opt_state = jitted_seq_update(seq_params, inner_opt_state, tree_params, data)
+        seq_params_history.append(seq_params)
 
-    return seq_params
+    seq_params_history = seq_params_history
+    #jnp.array([0,1,2]) #jnp.array(seq_params_history)
+    return seq_params, seq_params_history
 
 
 def outer_objective(tree_params, seq_params, data):
     seqs, metadata, temp, epoch = data
-    seq_params = inner_loop_solver(seq_params, tree_params, data)
-    return compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp, epoch), seq_params
+    seq_params, seq_params_history = inner_loop_solver(seq_params, tree_params, data)
+    return compute_loss_optimized(tree_params, seq_params, seqs, metadata, temp, epoch), Aux(seq_params = seq_params, seq_params_history = seq_params_history)
 
 
 
@@ -298,8 +307,8 @@ for _ in range(metadata['epochs']):
         
     
     #=> Update the parameters
-    tree_params, tree_opt_state = jitted_tree_update(tree_params, tree_opt_state, tree_opt_state.aux, [seqs, metadata, metadata['tLs'][0],_])
-    seq_params = tree_opt_state.aux
+    tree_params, tree_opt_state = jitted_tree_update(tree_params, tree_opt_state, tree_opt_state.aux.seq_params, [seqs, metadata, metadata['tLs'][0],_])
+    seq_params, seq_params_history = tree_opt_state.aux.seq_params, tree_opt_state.aux.seq_params_history
 
     cost, cost_surrogate, tree_force_loss, entropy_loss, loss = vmap_compute_detailed_loss_optimized(tree_params, seq_params, seqs, metadata, metadata['tLs'][0], sm,  _)
     pos = jnp.argmin(cost)
