@@ -69,20 +69,19 @@ def inner_objective(seq_params, tree_params, data):
 class Aux(NamedTuple):
   """Stores auxiliary values computed during loss function eval for reuse."""
   seq_params: Array
-  seq_params_history: list
+  seq_params_history: None #list
 
 def inner_loop_solver(seq_params, tree_params, data):
     seqs, metadata, temp, epoch = data
     
     inner_opt_state = seq_optimizer.init_state(seq_params, tree_params, data)
-    seq_params_history = []
+    seq_params_history = None # []
     
     for i in range(0, seq_optimizer.maxiter):
         seq_params, inner_opt_state = jitted_seq_update(seq_params, inner_opt_state, tree_params, data)
-        seq_params_history.append(seq_params)
+        #seq_params_history.append(seq_params)
 
-    seq_params_history = seq_params_history
-    #jnp.array([0,1,2]) #jnp.array(seq_params_history)
+    #seq_params_history = seq_params_history
     return seq_params, seq_params_history
 
 
