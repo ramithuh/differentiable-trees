@@ -265,7 +265,7 @@ mapped_compute_loss_optimized = jax.vmap(compute_loss_optimized, in_axes = (vmap
 
 def tree_distribution_loss(params, seqs, metadata, temp, epoch):
     val = mapped_compute_loss_optimized(params, seqs, metadata, temp, epoch)
-    loss = jnp.sum(val)
+    loss = jnp.mean(val)
     return loss 
 
 vmap_compute_detailed_loss_optimized =  jit(vmap(compute_detailed_loss_optimized, (vmap_keys, None, None, None, None, None),0))

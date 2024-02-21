@@ -11,7 +11,6 @@ from functools import partial
 from typing import Dict, List
 from jaxtyping import Array, Float
 
-from modules.upgma import differentiable_upgma
 from modules.sankoff import run_diff_sankoff
 from modules.sankoff import run_sankoff
 
@@ -118,6 +117,37 @@ def update_tree_sankoff(params : Dict[str, Array], base_tree : Float[Array, "nod
     
     return t
 
+def ReinMax(theta, temp, n_letters):
+    """
+        Implements the ReinMax function
+    """
+
+    phi_0 = nn.softmax(theta)
+    D =  jax.nn.one_hot(jnp.argmax(phi_0, axis = -1), n_letters)
+
+    phi_1 = (D + nn.softmax(theta*temp))/2
+    phi_1 = nn.softmax(jax.lax.stop_gradient(jnp.log(phi_1) - theta) +  theta)
+
+    phi_2 = 2*phi_1 - 0.5 * phi_0
+    D = phi_2 - jax.lax.stop_gradient(phi_2) + D
+
+    return D
+
+
+def gumbel_softmax(logits, temperature, seed):
+    key = jax.random.PRNGKey(seed)
+    
+    # obtain log probabilities over the amino acid positions
+    log_prob = jnp.log(jax.nn.softmax(logits))
+    
+    # sample gumbel noise
+    noise = jax.random.gumbel(key, logits.shape)
+    
+    out = log_prob + noise
+    out = jax.nn.softmax(out*temperature)
+    
+    return out
+
 @jit
 def update_seq(params : Dict[str, Array], seqs : Float[Array, "nodes letters"], temperature : Float = 1 ) -> Float[Array, "nodes letters"]:
     '''
@@ -139,47 +169,90 @@ def update_seq(params : Dict[str, Array], seqs : Float[Array, "nodes letters"], 
         # print(params[key].shape)
         # print(seq.shape)
         # break
-        seq      = nn.softmax(params[key])
         
-        # STE Trick
-        hard_seq = jax.nn.one_hot(jnp.argmax(seq, axis = -1), n_letters)
+        # Gumbel Softmax approach
+        # seq  = gumbel_softmax(params[key], temperature, i)
+        # seqs = seqs.at[- n_leaves + i + 1].set(seq)   
 
-        temp = jax.lax.stop_gradient(hard_seq - seq) + seq
-        seqs = seqs.at[- n_leaves + i + 1].set(temp)
+        # STE Trick
+        # seq      = nn.softmax(params[key])
+        # hard_seq = jax.nn.one_hot(jnp.argmax(seq, axis = -1), n_letters)
+        # temp = jax.lax.stop_gradient(hard_seq) - jax.lax.stop_gradient(seq) + seq
+        # seqs = seqs.at[- n_leaves + i + 1].set(temp)
         
-        # Usual way
-        #seqs = seqs.at[- n_leaves + i + 1].set(seq)    
+        # Usual way (can be used with and without a temperature)
+        seq      = nn.softmax(params[key]*temperature)
+        seqs = seqs.at[- n_leaves + i + 1].set(seq)   
+
+        # ReinMax
+        # seq = ReinMax(params[key], temperature, n_letters)
+        # seqs = seqs.at[- n_leaves + i + 1].set(seq)
+
+        ## mix of both softmax and ReinMax 
+        # seq_1      = nn.softmax(params[key])
+        # seq_2      = ReinMax(params[key], temperature, n_letters)
+
+        # seqs = seqs.at[- n_leaves + i + 1].set(seq_1 + seq_2)    
+
+
     return seqs
 
+
+def entropy_func(logits):
+    probs = jax.nn.softmax(logits)
+    
+    sum = (probs*jnp.log(probs)).sum(axis = 1).mean()
+        
+    return sum
+
 @jit
-def entropy_loss(t_ : Float[Array, "nodes nodes"]) -> List[Float]:
-    '''
-        Pushes the nevada constraint on the relaxed adjacency matrix
-    '''
-    
-    n_all = t_.shape[0]
+def seq_entropy_loss(params : Dict[str, Array], seqs : Float[Array, "nodes letters"]):
+
+    n_all = seqs.shape[0]
     n_leaves = (n_all + 1)//2
-    n_ancestors = n_all - n_leaves
-    
-    # generating the upper indices of the lower square matrix
-    upper_indices = jnp.triu_indices(n_ancestors)
-    lower_indices = jnp.tril_indices(n_ancestors)
-    shifted_upper_indices = (upper_indices[0] + n_ancestors, upper_indices[1] + n_leaves )
-    shifted_lower_indices = (lower_indices[0] + n_leaves, lower_indices[1] + n_leaves )
-    
-    blank = jnp.zeros((n_ancestors,n_ancestors))
 
-    lower_triangle_values = t_[shifted_lower_indices]
-    mat_1 = blank.at[lower_indices].set(lower_triangle_values)
+    total_entropy = 0
 
-    uppper_triangle_values = t_[shifted_upper_indices]
-    mat_2 = blank.at[upper_indices].set(uppper_triangle_values)
-    
-    prob_vector = mat_2[1:].sum(axis = 1)
+    # loop through ancestors
+    for i in range(0, n_all - n_leaves):
+        key = str(i) #chr(97+i + n_leaves)
 
-    cross_entropy_loss = -jnp.sum(1 * jnp.log(prob_vector))
+        val  = entropy_func(params[key])
     
-    return cross_entropy_loss
+        total_entropy += val
+
+    return total_entropy
+
+
+# @jit
+# def entropy_loss(t_ : Float[Array, "nodes nodes"]) -> List[Float]:
+#     '''
+#         Pushes the nevada constraint on the relaxed adjacency matrix
+#     '''
+    
+#     n_all = t_.shape[0]
+#     n_leaves = (n_all + 1)//2
+#     n_ancestors = n_all - n_leaves
+    
+#     # generating the upper indices of the lower square matrix
+#     upper_indices = jnp.triu_indices(n_ancestors)
+#     lower_indices = jnp.tril_indices(n_ancestors)
+#     shifted_upper_indices = (upper_indices[0] + n_ancestors, upper_indices[1] + n_leaves )
+#     shifted_lower_indices = (lower_indices[0] + n_leaves, lower_indices[1] + n_leaves )
+    
+#     blank = jnp.zeros((n_ancestors,n_ancestors))
+
+#     lower_triangle_values = t_[shifted_lower_indices]
+#     mat_1 = blank.at[lower_indices].set(lower_triangle_values)
+
+#     uppper_triangle_values = t_[shifted_upper_indices]
+#     mat_2 = blank.at[upper_indices].set(uppper_triangle_values)
+    
+#     prob_vector = mat_2[1:].sum(axis = 1)
+
+#     cross_entropy_loss = -jnp.sum(1 * jnp.log(prob_vector))
+    
+#     return cross_entropy_loss
 
 @jit
 def enforce_graph(t_ : Float[Array, "nodes nodes"], s : Float, metadata = None, verbose = False) -> List[Float]:
@@ -325,9 +398,10 @@ def compute_loss_optimized(params : Dict[str, Array], seqs : Float[Array, "nodes
 
     tree_force_loss = enforce_graph(t_,10,metadata)
     
-    cross_entropy_loss = 0 #entropy_loss(t_)
+    cross_entropy_loss = seq_entropy_loss(params, seqs)
+    #0 #entropy_loss(t_)
     
-    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
+    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss*(0.01-temp)
 
     return loss
 
@@ -357,52 +431,11 @@ def compute_detailed_loss_optimized(params : Dict[str, Array], seqs : Float[Arra
     cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
 
     tree_force_loss = enforce_graph(t_,10,metadata)
-    cross_entropy_loss = -1 #entropy_loss(t_) ##turned off
+    cross_entropy_loss = seq_entropy_loss(params, seqs)
+    #0 #entropy_loss(t_) ##turned off
     
-    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
+    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss*(0.01-temp)
 
     cost = compute_cost(seqs_,t_, sm) # real traversal cost
 
     return cost, cost_surrogate, tree_force_loss, cross_entropy_loss, loss
-
-
-    """Computes the total loss for a given set of sequences and a tree
-
-    Args:
-        params : contains the tree and seq trainable parameters
-        seqs   : sequences array. shape = (n_all, length, n_letters
-        base_tree : base tree with zeros
-        metadata (Dict) : contains the metadata
-        temp (Float) : temperature for the loss
-        verbose : returns individual loss item if True. Defaults to False.
-
-    Returns:
-        cost : total loss
-    """    
-    n_leaves = metadata['n_leaves']
-    n_all    = metadata['n_all']
-
-    if(metadata['args']['fix_seqs']):
-        seqs_ = seqs
-    else:
-        seqs_ = update_seq(params, seqs, temp )
-    
-    if(metadata['args']['fix_tree']):
-        t_ = base_tree
-    else:   
-        t_ = differentiable_upgma(params['t'], [0.1, 1, 0.5+temp])#update_tree(params, base_tree)
-    
-    
-    recurse_cost = 0 #compute_cost_recursive(t_, verbose = False)
-
-    cost_surrogate = compute_cost(seqs_,t_, metadata) # surrogate traversal cost
-    
-    tree_force_loss, loop_loss, bidirection_loss = 0.0, 0.0, 0.0 #enforce_graph(t_,10,metadata)
-    
-    loss = cost_surrogate #+ temp*(tree_force_loss + loop_loss + bidirection_loss + recurse_cost*500)
-
-    if(verbose):
-        cost           = compute_cost(seqs_,t_, metadata, surrogate_loss = False) # real traversal cost
-        return cost, cost_surrogate, tree_force_loss, loop_loss, bidirection_loss, recurse_cost, loss
-
-    return loss
