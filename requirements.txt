@@ -8,3 +8,6 @@ pandas==1.5.3
 wandb==0.13.10
 jaxtyping==0.2.14
 optax==0.1.4
+
+https://prod.liveshare.vsengsaas.visualstudio.com/join?25830C577E1A1C67F568786C12EC0391FAF0
+

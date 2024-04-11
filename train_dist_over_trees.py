@@ -7,9 +7,6 @@ import sys
 
 import optax
 import jaxopt
-from jaxopt import OptaxSolver
-from jaxopt import linear_solve
-from jax.tree_util import Partial
 
 import wandb
 import pydot
@@ -51,14 +48,6 @@ def generate_vmap_keys(params):
             vmap_keys[key] = 0
         
     return vmap_keys
-
-@jit
-def remove_batch_dim(seq_params):
-    new_params = {}
-    for i in range(0, len(seq_params.keys())):
-        new_params[str(i)] = seq_params[str(i)][0]
-    
-    return new_params
 
 @jit
 def get_one_tree_and_seq(params, pos):
@@ -147,6 +136,12 @@ if(args['groundtruth']):
     # seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
     
     [seqs, leaf_ids], [gt_seqs, label_names], [tree, shrinked_tree, original_tree, fig] = generate_general_groundtruth(metadata, perfect=False, seed = metadata['seed'], show_derivation = True)
+
+    print("_____")
+    print(seqs)
+    print("gt seqs")
+    print(gt_seqs)
+    print("____")
 
     seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.float64)
     gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.float64)

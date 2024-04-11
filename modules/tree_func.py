@@ -378,7 +378,6 @@ def compute_loss_optimized(params : Dict[str, Array], seqs : Float[Array, "nodes
     Args:
         params : contains the tree and seq trainable parameters
         seqs   : sequences array. shape = (n_all, length, n_letters
-        base_tree : base tree with zeros
         metadata (Dict) : contains the metadata
         temp (Float) : temperature for the loss
         verbose : returns individual loss item if True. Defaults to False.
@@ -398,10 +397,10 @@ def compute_loss_optimized(params : Dict[str, Array], seqs : Float[Array, "nodes
 
     tree_force_loss = enforce_graph(t_,10,metadata)
     
-    cross_entropy_loss = seq_entropy_loss(params, seqs)
+    cross_entropy_loss = seq_entropy_loss(params, seqs)*(0.5-temp)
     #0 #entropy_loss(t_)
     
-    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss*(0.01-temp)
+    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
 
     return loss
 
@@ -412,7 +411,6 @@ def compute_detailed_loss_optimized(params : Dict[str, Array], seqs : Float[Arra
     Args:
         params : contains the tree and seq trainable parameters
         seqs   : sequences array. shape = (n_all, length, n_letters
-        base_tree : base tree with zeros
         metadata (Dict) : contains the metadata
         temp (Float) : temperature for the loss
         verbose : returns individual loss item if True. Defaults to False.
@@ -431,10 +429,10 @@ def compute_detailed_loss_optimized(params : Dict[str, Array], seqs : Float[Arra
     cost_surrogate = compute_surrogate_cost(seqs_,t_) # surrogate traversal cost
 
     tree_force_loss = enforce_graph(t_,10,metadata)
-    cross_entropy_loss = seq_entropy_loss(params, seqs)
+    cross_entropy_loss = seq_entropy_loss(params, seqs)*(0.5-temp)
     #0 #entropy_loss(t_) ##turned off
     
-    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss*(0.01-temp)
+    loss = cost_surrogate + temp*(tree_force_loss) + cross_entropy_loss
 
     cost = compute_cost(seqs_,t_, sm) # real traversal cost
 
