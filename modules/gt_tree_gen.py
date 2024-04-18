@@ -42,15 +42,15 @@ def mutate(key, exclude_indexes):
 
 def create_seq(key, seq, depth):
 
-  k1, k2 = random.split(key)
+  k1, k2 = jax.random.split(key)
   
   if(depth > target_depth):
     return
 
   random_indexes = [[] for x in range(2)]
   
-  random_indexes[0]= random.choice(k1, jnp.array(range(len(seq))), (num_mutations,1), replace=False)
-  random_indexes[1]= random.choice(k2, jnp.array(range(len(seq))), (num_mutations,1), replace=False)
+  random_indexes[0]= jax.random.choice(k1, jnp.array(range(len(seq))), (num_mutations,1), replace=False)
+  random_indexes[1]= jax.random.choice(k2, jnp.array(range(len(seq))), (num_mutations,1), replace=False)
 
 
   seq_1 = seq
@@ -251,5 +251,6 @@ def generate_general_groundtruth(
     true_main = jnp.stack(sorted_arrays)
     masked_main = true_main.at[n_leaves:n_all].set(0)
     
-         
+    adj_matrix = adj_matrix.at[-1,-1].set(1) ## manually fix root's self connection
+    
     return masked_main, true_main, adj_matrix
