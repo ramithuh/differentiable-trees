@@ -252,4 +252,4 @@ def generate_general_groundtruth(
     masked_main = true_main.at[n_leaves:n_all].set(0)
     
          
-    return true_main, masked_main, adj_matrix
+    return masked_main, true_main, adj_matrix

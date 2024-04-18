@@ -152,7 +152,7 @@ sm = jnp.ones((metadata['n_letters'],metadata['n_letters'])) - jnp.identity(meta
 if(args['groundtruth']):
     # seqs, gt_seqs, tree = generate_groundtruth(metadata, metadata['seed'])
     
-    [seqs, leaf_ids], [gt_seqs, label_names], [tree, shrinked_tree, original_tree, fig] = generate_general_groundtruth(metadata, perfect=False, seed = metadata['seed'], show_derivation = True)
+    seqs, gt_seqs, tree = generate_general_groundtruth(metadata, perfect=False, seed = metadata['seed'], show_derivation = True)
 
     seqs    = jax.nn.one_hot(seqs, n_letters).astype(jnp.float64)
     gt_seqs = jax.nn.one_hot(gt_seqs, n_letters).astype(jnp.float64)
