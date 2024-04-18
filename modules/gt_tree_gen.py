@@ -234,7 +234,7 @@ def generate_general_groundtruth(
     if(perfect): 
       # perfect mode, possible only if N is a power of 2
       print_critical_info("Perfect tree mode")
-      assert metadata['n_leaves'] == 2**int(math.log2(n))
+      assert metadata['n_leaves'] == 2**int(math.log2(n_leaves))
 
       return generate_groundtruth(metadata, seed, verbose)
     
