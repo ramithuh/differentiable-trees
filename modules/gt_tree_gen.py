@@ -230,6 +230,13 @@ def generate_general_groundtruth(
     n_ancestors = metadata['n_ancestors']
     seq_length  = metadata['seq_length']
     n_letters   = metadata['n_letters']
+
+    if(perfect): 
+      # perfect mode, possible only if N is a power of 2
+      print_critical_info("Perfect tree mode")
+      assert metadata['n_leaves'] == 2**int(math.log2(n))
+
+      return generate_groundtruth(metadata, seed, verbose)
     
     seq_dict = {}
 
@@ -252,5 +259,5 @@ def generate_general_groundtruth(
     masked_main = true_main.at[n_leaves:n_all].set(0)
     
     adj_matrix = adj_matrix.at[-1,-1].set(1) ## manually fix root's self connection
-    
+
     return masked_main, true_main, adj_matrix
