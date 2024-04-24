@@ -1,4 +1,5 @@
 import jax
+import warnings
 import numpy as np
 import jax.nn as nn
 import jax.numpy as jnp
@@ -7,9 +8,9 @@ from typing import Dict, List
 from jaxtyping import Array, Float
 from functools import partial
 
-from ott.tools import soft_sort
-# softranks = soft_sort.ranks#jax.jit(soft_sort.ranks)
-softranks = jax.jit(soft_sort.ranks, static_argnums=(2)) 
+# from ott.tools import soft_sort
+# # softranks = soft_sort.ranks#jax.jit(soft_sort.ranks)
+# softranks = jax.jit(soft_sort.ranks, static_argnums=(2)) 
 
 def softmin(x, epsilon = 1, axis = 0):
     c = jnp.max(-x*epsilon, axis = axis, keepdims=True)
@@ -176,6 +177,20 @@ def run_diff_sankoff(adj, cost_mat, seq, metadata, epsilon = 1e-5):
     return dp, softmin(dp[:, -1], epsilon, axis = 1).sum() #dp[:, -1].min(axis = 1).sum()
 
 def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
+    """Run sankoff algorithm on the given tree and leaves.
+
+        Args:
+            adj : adjacency matrix
+            cost_mat : cost matrix for each of the letters
+            seq : matrix of shape (nodes, letters); first n_leaves has leaves, others are just a placeholder for ancestors
+            metadata : dictionary of tree config
+            return_path : if True, return the optimal ancestors that leads to the optimal cost
+
+        Returns:
+            optimal_seqs : only if return_path is true
+            dp : filled dp table (length, nodes, letters)
+            optimal_cost : sum of minimums in last row of each dp table
+    """
     adj = adj.at[-1,-1].set(0) ##manually remove self connection (convention used in the train script)
     
     ## ensure types are float64
@@ -209,17 +224,23 @@ def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
     seq_chars = jnp.zeros((seq.shape[1], metadata['n_all'],1)).astype(jnp.float64)
     found_seq = seq.copy().astype(jnp.float64)
     
-    if(return_path):
+    if(return_path and seq.shape[0] <=  64):
         node = adj.shape[0] - 1
 
-        if(seq.shape[0] <=  64): # if too many sequences don't backtrack and find best ancestors, cost is enough
-            for i in range(0,seq.shape[1]):
-                letter = jnp.argmin(dp[i,node,:]).astype(int)
+        # second condition if too many sequences don't backtrack and find best ancestors, cost is enough
+        for i in range(0,seq.shape[1]):
+            letter = jnp.argmin(dp[i,node,:]).astype(int)
 
-                chars = backtrack_dp(node, letter, seq_chars[i], connections[i], n_leaves).reshape(metadata['n_all'],)
-                
-                found_seq = found_seq.at[metadata['n_leaves']:,i].set(chars[metadata['n_leaves']:])
-                # print(".", end = "")
+            chars = backtrack_dp(node, letter, seq_chars[i], connections[i], n_leaves).reshape(metadata['n_all'],)
+            
+            found_seq = found_seq.at[metadata['n_leaves']:,i].set(chars[metadata['n_leaves']:])
+            # print(".", end = "")
+
+        return found_seq, dp, dp[:, -1].min(axis = 1).sum()
+    else:
+        warnings.warn("Optimal sequences will NOT be returned", UserWarning)
+
+        return None, dp, dp[:, -1].min(axis = 1).sum()
 
     
-    return found_seq, dp, dp[:, -1].min(axis = 1).sum()
+    
