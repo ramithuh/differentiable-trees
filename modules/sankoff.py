@@ -13,8 +13,13 @@ from functools import partial
 # softranks = jax.jit(soft_sort.ranks, static_argnums=(2)) 
 
 def softmin(x, epsilon = 1, axis = 0):
-    c = jnp.max(-x*epsilon, axis = axis, keepdims=True)
-    return -(jnp.log(jnp.mean(jnp.exp(-x*epsilon - c), axis = axis, keepdims = True ) - 1e-6) + c/epsilon)[...,-1]
+    c = -jax.nn.softmax(-x/epsilon, axis = axis)
+    output = jnp.sum(c*-x, axis = axis, keepdims=True)
+    return output[...,-1]
+
+# def softmin(x, epsilon = 1, axis = 0):
+#     c = jnp.max(-x*epsilon, axis = axis, keepdims=True)
+#     return -(jnp.log(jnp.mean(jnp.exp(-x*epsilon - c), axis = axis, keepdims = True ) - 1e-6) + c/epsilon)[...,-1]
 
 # @partial(jax.jit, static_argnums=[5,6]) 
 def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_letters, verbose = False):
@@ -100,11 +105,11 @@ def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters,
     for node in range(n_leaves, n_all): ## loop all the ancestors in order
         
         ## consider topologically feasible candidates (slicing -> :node)
-        prob_children    = jax.nn.softmax(adj[:,node][:node]*5)*2 #softranks(adj[:,node][:node], epsilon = epsilon)/epsilon)*2 
+        prob_children    = adj[:,node][:node]
         children_onehot  = jnp.eye(node,node).astype(jnp.float64)*prob_children
         
         #print(prob_children)
-        delta = 1e1*(adj[:,node][:node].sum() - 2)**2
+        #delta = 1e1*(adj[:,node][:node].sum() - 2)**2
         
         mask = jnp.matmul(children_onehot, jnp.ones((node,dp.shape[1])).astype(jnp.float64)) #mask to supress rows from the dp table
 
@@ -118,7 +123,7 @@ def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters,
         
         ans = node_mix * mask[::, None]
         ans = softmin(ans, epsilon, axis = 2) #-nn.logsumexp(-ans/epsilon, axis = 2)*epsilon
-        ans = jnp.sum(ans, axis = 0) + delta #penalize more if connections are not rigid
+        ans = jnp.sum(ans, axis = 0) #+ delta #penalize more if connections are not rigid
 
         dp = dp.at[node,::].set(ans)
 
