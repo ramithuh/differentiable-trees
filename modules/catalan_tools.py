@@ -10,7 +10,7 @@ import jax
 import numpy as np
 import random
 
-map = {'0': '(',
+char_map = {'0': '(',
        '1': ')'
       }
 
@@ -131,7 +131,7 @@ def generate_bifurcating_tree(seed,n_leaves):
     if(r_outcome > l_outcome or l_outcome > total_edges//2 or r_outcome > total_edges//2 ):
       continue
     else:
-      tree_str += map[str(val)]
+      tree_str += char_map[str(val)]
       r_count += val
       l_count += (1 if val == 0 else 0)
 
