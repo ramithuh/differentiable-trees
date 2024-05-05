@@ -15,6 +15,8 @@ from functools import partial
 def softmin(x, epsilon = 1, axis = 0):
     c = -jax.nn.softmax(-x/epsilon, axis = axis)
     output = jnp.sum(c*-x, axis = axis, keepdims=True)
+    # output = jnp.min(x, axis=axis, keepdims=True)
+    
     return output[...,-1]
 
 # def softmin(x, epsilon = 1, axis = 0):
@@ -56,7 +58,7 @@ def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_let
         total_cost = 0
         nodes = []
         
-        assert children.shape[0] == 2, "only bifurcating trees are supported"
+        #assert children.shape[0] == 2, "only bifurcating trees are supported"
         
         for child in children:
             cur_node = int(child)
@@ -71,11 +73,11 @@ def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_let
         dp = dp.at[node,::].set(total_cost)
     
         #below parts should be generalized for trees other than bifurcating ones
-        dp_nodes = dp_nodes.at[node, ::, 0].set(nodes[0][0]) # child 1
-        dp_nodes = dp_nodes.at[node, ::, 1].set(nodes[0][1]) # letter in child 1
+        # dp_nodes = dp_nodes.at[node, ::, 0].set(nodes[0][0]) # child 1
+        # dp_nodes = dp_nodes.at[node, ::, 1].set(nodes[0][1]) # letter in child 1
 
-        dp_nodes = dp_nodes.at[node, ::, 2].set(nodes[1][0]) # child 2
-        dp_nodes = dp_nodes.at[node, ::, 3].set(nodes[1][1]) # letter in child 2
+        # dp_nodes = dp_nodes.at[node, ::, 2].set(nodes[1][0]) # child 2
+        # dp_nodes = dp_nodes.at[node, ::, 3].set(nodes[1][1]) # letter in child 2
 
     return dp, dp_nodes
 
@@ -106,12 +108,12 @@ def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters,
         
         ## consider topologically feasible candidates (slicing -> :node)
         prob_children    = adj[:,node][:node]
-        children_onehot  = jnp.eye(node,node).astype(jnp.float64)*prob_children
+        children_onehot  = jnp.eye(node,node).astype(jnp.float64)
         
         #print(prob_children)
         #delta = 1e1*(adj[:,node][:node].sum() - 2)**2
         
-        mask = jnp.matmul(children_onehot, jnp.ones((node,dp.shape[1])).astype(jnp.float64)) #mask to supress rows from the dp table
+        #mask = jnp.matmul(children_onehot, jnp.ones((node,dp.shape[1])).astype(jnp.float64)) #mask to supress rows from the dp table
 
         if(verbose):
             print(f"at node {node+1} children are : {adj[:,node][:node]}")
@@ -121,7 +123,7 @@ def run_diff_dp(adj : Float[Array, "nodes nodes"], dp, seq, cost_mat, n_letters,
         dp_sel = jnp.matmul(children_onehot,dp[:node]) ##lookup dp table's first node-1 rows (topologically feasible candidates)
         node_mix = cost_mat[::,::] + dp_sel[::, None]
         
-        ans = node_mix * mask[::, None]
+        ans = node_mix * prob_children[::, None, None]
         ans = softmin(ans, epsilon, axis = 2) #-nn.logsumexp(-ans/epsilon, axis = 2)*epsilon
         ans = jnp.sum(ans, axis = 0) #+ delta #penalize more if connections are not rigid
 
@@ -169,11 +171,12 @@ def run_diff_sankoff(adj, cost_mat, seq, metadata, epsilon = 1e-5):
     seq = seq.astype(jnp.float64)
     cost_mat = cost_mat.astype(jnp.float64)
     
-    n_letters = metadata['n_letters']
-    n_leaves  = metadata['n_leaves']
+    n_all = adj.shape[0]
+    n_letters = cost_mat.shape[0]
+    n_leaves  = (n_all + 1)//2
     
     ##empty dp table
-    dp       = jnp.ones((seq.shape[1], metadata['n_all'], n_letters)).astype(jnp.float64)*1e5
+    dp       = jnp.ones((seq.shape[1], n_all, n_letters)).astype(jnp.float64)*1e5
     
     # connections = dp_nodes.copy()
         
@@ -226,26 +229,26 @@ def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
     #     connections = connections.at[i].set(ans[1])
         
     
-    seq_chars = jnp.zeros((seq.shape[1], metadata['n_all'],1)).astype(jnp.float64)
-    found_seq = seq.copy().astype(jnp.float64)
+    # seq_chars = jnp.zeros((seq.shape[1], metadata['n_all'],1)).astype(jnp.float64)
+    # found_seq = seq.copy().astype(jnp.float64)
     
-    if(return_path and seq.shape[0] <=  64):
-        node = adj.shape[0] - 1
+    # if(return_path and seq.shape[0] <=  64):
+    #     node = adj.shape[0] - 1
 
-        # second condition if too many sequences don't backtrack and find best ancestors, cost is enough
-        for i in range(0,seq.shape[1]):
-            letter = jnp.argmin(dp[i,node,:]).astype(int)
+    #     # second condition if too many sequences don't backtrack and find best ancestors, cost is enough
+    #     for i in range(0,seq.shape[1]):
+    #         letter = jnp.argmin(dp[i,node,:]).astype(int)
 
-            chars = backtrack_dp(node, letter, seq_chars[i], connections[i], n_leaves).reshape(metadata['n_all'],)
+    #         chars = backtrack_dp(node, letter, seq_chars[i], connections[i], n_leaves).reshape(metadata['n_all'],)
             
-            found_seq = found_seq.at[metadata['n_leaves']:,i].set(chars[metadata['n_leaves']:])
-            # print(".", end = "")
+    #         found_seq = found_seq.at[metadata['n_leaves']:,i].set(chars[metadata['n_leaves']:])
+    #         # print(".", end = "")
 
-        return found_seq, dp, dp[:, -1].min(axis = 1).sum()
-    else:
-        warnings.warn("Optimal sequences will NOT be returned", UserWarning)
+    #     return found_seq, dp, dp[:, -1].min(axis = 1).sum()
+    # else:
+    #     warnings.warn("Optimal sequences will NOT be returned", UserWarning)
 
-        return None, dp, dp[:, -1].min(axis = 1).sum()
+    return None, dp, dp[:, -1].min(axis = 1).sum()
 
     
     
