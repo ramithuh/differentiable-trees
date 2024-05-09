@@ -246,7 +246,7 @@ def generate_general_groundtruth(
     tree_str  = generate_bifurcating_tree(seed, n_leaves)
     adj_matrix, _ = convert_parenthesis_notation_to_adj_matrix(tree_str)
     
-    traverse_and_create_seq(n_all-1, seq, adj_matrix, jax.random.key(0))
+    traverse_and_create_seq(n_all-1, seq, adj_matrix, jax.random.key(seed))
     
     ### generate the outputs in the required form:
     sorted_keys = sorted(seq_dict.keys(), key=lambda x: int(x))
