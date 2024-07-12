@@ -73,11 +73,11 @@ def run_dp(adj : Float[Array, "nodes nodes"], dp, dp_nodes, seq, cost_mat, n_let
         dp = dp.at[node,::].set(total_cost)
     
         #below parts should be generalized for trees other than bifurcating ones
-        # dp_nodes = dp_nodes.at[node, ::, 0].set(nodes[0][0]) # child 1
-        # dp_nodes = dp_nodes.at[node, ::, 1].set(nodes[0][1]) # letter in child 1
+        dp_nodes = dp_nodes.at[node, ::, 0].set(nodes[0][0]) # child 1
+        dp_nodes = dp_nodes.at[node, ::, 1].set(nodes[0][1]) # letter in child 1
 
-        # dp_nodes = dp_nodes.at[node, ::, 2].set(nodes[1][0]) # child 2
-        # dp_nodes = dp_nodes.at[node, ::, 3].set(nodes[1][1]) # letter in child 2
+        dp_nodes = dp_nodes.at[node, ::, 2].set(nodes[1][0]) # child 2
+        dp_nodes = dp_nodes.at[node, ::, 3].set(nodes[1][1]) # letter in child 2
 
     return dp, dp_nodes
 
