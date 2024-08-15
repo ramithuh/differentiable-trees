@@ -232,7 +232,7 @@ def run_sankoff(adj, cost_mat, seq, metadata, return_path = False):
     seq_chars = jnp.zeros((seq.shape[1], metadata['n_all'],1)).astype(jnp.float64)
     found_seq = seq.copy().astype(jnp.float64)
     
-    if(return_path and seq.shape[0] <=  64):
+    if(return_path and seq.shape[0] <=  1024):
         node = adj.shape[0] - 1
 
         # second condition if too many sequences don't backtrack and find best ancestors, cost is enough
